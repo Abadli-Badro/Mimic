@@ -87,6 +87,19 @@ def visualize(
 
 
 @app.command()
+def merge(
+    model: Path = typer.Argument(..., help="Path to Mixamo rigged .glb model (T-pose)."),
+    animation: Path = typer.Argument(..., help="Path to skeleton-only animation .glb."),
+    output: Path = typer.Option(..., "-o", "--output", help="Output animated .glb path."),
+) -> None:
+    """Merge a skeleton animation onto a full rigged Mixamo model."""
+    from mimic.export.merge_animation import merge_animation
+
+    result = merge_animation(model, animation, output)
+    typer.echo(f"Animated model saved to: {result}")
+
+
+@app.command()
 def info() -> None:
     """Show project information."""
     import mimic
