@@ -32,10 +32,13 @@ def merge_animation(
         raise ValueError(f"No skin in {model_path}")
 
     # Build name -> node index for both
+    # Model may use underscores (mixamorig_Head) or colons (mixamorig:Head)
     model_nodes: dict[str, int] = {}
     for i, node in enumerate(model.nodes):
         if node.name:
             model_nodes[node.name] = i
+            # Also register normalized version (replace _ with :)
+            model_nodes[node.name.replace("_", ":")] = i
 
     anim_nodes: dict[str, int] = {}
     for i, node in enumerate(anim_gltf.nodes):
