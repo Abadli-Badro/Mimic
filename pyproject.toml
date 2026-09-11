@@ -11,10 +11,8 @@ license = "MIT"
 requires-python = ">=3.10"
 authors = [{ name = "ABADLI Badreddine" }]
 dependencies = [
-    "opencv-python>=4.8",
     "mediapipe>=0.10",
     "numpy>=1.24",
-    "scipy>=1.11",
     "pygltflib>=1.16",
     "typer>=0.9",
 ]
@@ -23,6 +21,7 @@ dependencies = [
 dev = [
     "pytest>=7.4",
     "ruff>=0.1",
+    "matplotlib>=3.7",
 ]
 
 [project.scripts]
@@ -34,6 +33,7 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["UP045"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mimic.extraction.video_reader import read_frames
-from mimic.extraction.pose_extractor import extract_landmarks
-from mimic.processing.smoothing import smooth_landmarks
-from mimic.processing.rotation_solver import solve_rotations
-from mimic.retargeting.retarget import retarget
 from mimic.export.gltf_writer import write_gltf
+from mimic.extraction.pose_extractor import extract_landmarks
+from mimic.extraction.video_reader import read_frames
+from mimic.processing.rotation_solver import solve_rotations
+from mimic.processing.smoothing import smooth_landmarks
+from mimic.retargeting.retarget import retarget
 
 
 def run(
