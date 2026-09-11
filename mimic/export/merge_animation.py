@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pygltflib
+from scipy.spatial.transform import Rotation
 
 
 def merge_animation(
@@ -14,6 +15,12 @@ def merge_animation(
     output_path: Path,
 ) -> Path:
     """Take animation keyframes from one GLB and apply them to another GLB's matching nodes.
+
+    Pre-multiplies each bone's animation rotation by the model's rest rotation,
+    so that the animation correctly replaces the node's rotation in glTF
+    (where animation channels OVERRIDE node.rotation, they don't combine with it).
+
+    Also strips any existing animations from the model to avoid conflicts.
 
     Args:
         model_path: Full rigged model .glb (mesh, skin, T-pose skeleton).
@@ -31,13 +38,16 @@ def merge_animation(
     if not model.skins:
         raise ValueError(f"No skin in {model_path}")
 
+    # Strip existing animations — our animation replaces them
+    if model.animations:
+        print(f"Stripping {len(model.animations)} existing animation(s) from model")
+        model.animations.clear()
+
     # Build name -> node index for both
-    # Model may use underscores (mixamorig_Head) or colons (mixamorig:Head)
     model_nodes: dict[str, int] = {}
     for i, node in enumerate(model.nodes):
         if node.name:
             model_nodes[node.name] = i
-            # Also register normalized version (replace _ with :)
             model_nodes[node.name.replace("_", ":")] = i
 
     anim_nodes: dict[str, int] = {}
@@ -83,9 +93,10 @@ def merge_animation(
     num_frames = ts_acc.count
     fps = float(num_frames - 1) / float(timestamps[-1]) if timestamps[-1] > 0 else 30.0
 
-    # Read per-bone keyframe data from source
-    bone_quats: dict[int, np.ndarray] = {}  # channel_idx -> quaternions
-    for ch_idx, sampler_idx, _ in matches:
+    # Read per-bone keyframe data, pre-multiply by model rest rotations
+    bone_quats: dict[int, np.ndarray] = {}
+    rest_count = 0
+    for ch_idx, sampler_idx, model_node_idx in matches:
         sampler = source_anim.samplers[sampler_idx]
         out_acc = anim_gltf.accessors[sampler.output]
         out_bv = anim_gltf.bufferViews[out_acc.bufferView]
@@ -93,8 +104,22 @@ def merge_animation(
         data = np.frombuffer(
             src_blob[out_offset:out_offset + out_acc.count * 16],
             dtype=np.float32,
-        ).reshape(out_acc.count, 4)
+        ).reshape(out_acc.count, 4).copy()
+
+        # Pre-multiply by model rest rotation
+        model_node = model.nodes[model_node_idx]
+        rest_q = np.array(model_node.rotation if model_node.rotation else [0.0, 0.0, 0.0, 1.0])
+        if not np.allclose(rest_q, [0, 0, 0, 1], atol=0.001):
+            rest_rot = Rotation.from_quat(rest_q)
+            for frame_idx in range(data.shape[0]):
+                solver_q = data[frame_idx]
+                final_rot = rest_rot * Rotation.from_quat(solver_q)
+                data[frame_idx] = final_rot.as_quat()
+            rest_count += 1
+
         bone_quats[ch_idx] = data.copy()
+
+    print(f"Pre-multiplied rest rotations for {rest_count} bones")
 
     # Build timestamp and keyframe bytes
     timestamp_bytes = timestamps.tobytes()

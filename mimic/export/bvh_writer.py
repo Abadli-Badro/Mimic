@@ -114,8 +114,11 @@ def write_bvh(
             # Root position (0,0,0) — no root motion
             values.extend([0.0, 0.0, 0.0])
             for joint in joint_order:
-                quat = rotations.get(joint, np.zeros((num_frames, 4)))
-                q = quat[frame_idx]  # (x, y, z, w)
+                quat = rotations.get(joint, None)
+                if quat is None:
+                    q = np.array([0.0, 0.0, 0.0, 1.0])
+                else:
+                    q = quat[frame_idx]  # (x, y, z, w)
                 # Convert quaternion to Euler angles (BVH uses degrees)
                 r = Rotation.from_quat(q)
                 euler = r.as_euler("XYZ", degrees=True)

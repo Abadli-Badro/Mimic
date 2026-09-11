@@ -96,7 +96,7 @@ def extract_landmarks(
 
             if result.pose_world_landmarks:
                 lm = result.pose_world_landmarks[0]
-                coords = np.array([[p.x, p.y, p.z] for p in lm])
+                coords = np.array([[p.x, -p.y, -p.z] for p in lm])
                 vis = np.array([p.visibility for p in lm])
             else:
                 coords = np.zeros((33, 3))

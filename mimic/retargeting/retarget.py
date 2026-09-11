@@ -12,21 +12,26 @@ MAPPING_PATH = Path(__file__).parent / "mixamo_mapping.json"
 INTERNAL_TO_MIXAMO = {
     "pelvis": "mixamorig:Hips",
     "spine": "mixamorig:Spine",
+    "spine1": "mixamorig:Spine1",
     "chest": "mixamorig:Spine2",
     "neck": "mixamorig:Neck",
     "head": "mixamorig:Head",
+    "left_shoulder": "mixamorig:LeftShoulder",
+    "right_shoulder": "mixamorig:RightShoulder",
     "left_upper_arm": "mixamorig:LeftArm",
     "left_lower_arm": "mixamorig:LeftForeArm",
     "left_hand": "mixamorig:LeftHand",
     "right_upper_arm": "mixamorig:RightArm",
     "right_lower_arm": "mixamorig:RightForeArm",
     "right_hand": "mixamorig:RightHand",
-    "left_upper_leg": "mixamorig:LeftUpLeg",
-    "left_lower_leg": "mixamorig:LeftLeg",
-    "left_foot": "mixamorig:LeftFoot",
-    "right_upper_leg": "mixamorig:RightUpLeg",
-    "right_lower_leg": "mixamorig:RightLeg",
-    "right_foot": "mixamorig:RightFoot",
+    "left_hip": "mixamorig:LeftUpLeg",
+    "left_upper_leg": "mixamorig:LeftLeg",
+    "left_lower_leg": "mixamorig:LeftFoot",
+    "left_foot": "mixamorig:LeftToeBase",
+    "right_hip": "mixamorig:RightUpLeg",
+    "right_upper_leg": "mixamorig:RightLeg",
+    "right_lower_leg": "mixamorig:RightFoot",
+    "right_foot": "mixamorig:RightToeBase",
 }
 
 # Mixamo skeleton hierarchy
@@ -48,9 +53,11 @@ MIXAMO_HIERARCHY = {
     "mixamorig:LeftUpLeg": "mixamorig:Hips",
     "mixamorig:LeftLeg": "mixamorig:LeftUpLeg",
     "mixamorig:LeftFoot": "mixamorig:LeftLeg",
+    "mixamorig:LeftToeBase": "mixamorig:LeftFoot",
     "mixamorig:RightUpLeg": "mixamorig:Hips",
     "mixamorig:RightLeg": "mixamorig:RightUpLeg",
     "mixamorig:RightFoot": "mixamorig:RightLeg",
+    "mixamorig:RightToeBase": "mixamorig:RightFoot",
 }
 
 

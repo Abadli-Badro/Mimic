@@ -41,6 +41,10 @@ def _up() -> np.ndarray:
     return np.array([0.0, 1.0, 0.0])
 
 
+def _down() -> np.ndarray:
+    return np.array([0.0, -1.0, 0.0])
+
+
 def _left() -> np.ndarray:
     return np.array([-1.0, 0.0, 0.0])
 
@@ -49,61 +53,62 @@ def _right() -> np.ndarray:
     return np.array([1.0, 0.0, 0.0])
 
 
-def _forward() -> np.ndarray:
-    return np.array([0.0, 0.0, -1.0])
-
-
 def create_mediapipe_skeleton() -> Skeleton:
     """Create the internal skeleton matching MediaPipe pose landmarks.
 
-    Bones are defined as (parent_joint, child_joint) pairs with rest-pose
-    direction vectors pointing from parent to child.
+    Y-up coordinate system (after MediaPipe Y-flip).
+    Bones point from parent joint to child joint in rest/T-pose.
     """
     skel = Skeleton()
 
-    # Spine chain
+    # Spine chain (Y-up: positive Y = upward)
     skel.add_bone("pelvis", parent=None, rest_direction=_up())
     skel.add_bone("spine", parent="pelvis", rest_direction=_up())
-    skel.add_bone("chest", parent="spine", rest_direction=_up())
+    skel.add_bone("spine1", parent="spine", rest_direction=_up())
+    skel.add_bone("chest", parent="spine1", rest_direction=_up())
     skel.add_bone("neck", parent="chest", rest_direction=_up())
     skel.add_bone("head", parent="neck", rest_direction=_up())
 
-    # Left arm
+    # Shoulders
     skel.add_bone("left_shoulder", parent="chest", rest_direction=_left())
+    skel.add_bone("right_shoulder", parent="chest", rest_direction=_right())
+
+    # Left arm (T-pose: extends left, -X)
     skel.add_bone("left_upper_arm", parent="left_shoulder", rest_direction=_left())
     skel.add_bone("left_lower_arm", parent="left_upper_arm", rest_direction=_left())
     skel.add_bone("left_hand", parent="left_lower_arm", rest_direction=_left())
 
-    # Right arm
-    skel.add_bone("right_shoulder", parent="chest", rest_direction=_right())
+    # Right arm (T-pose: extends right, +X)
     skel.add_bone("right_upper_arm", parent="right_shoulder", rest_direction=_right())
     skel.add_bone("right_lower_arm", parent="right_upper_arm", rest_direction=_right())
     skel.add_bone("right_hand", parent="right_lower_arm", rest_direction=_right())
 
-    # Left leg
-    skel.add_bone("left_hip", parent="pelvis", rest_direction=_left())
+    # Hips
+    skel.add_bone("left_hip", parent="pelvis", rest_direction=np.array([-0.3, -1.0, 0.0]))
+    skel.add_bone("right_hip", parent="pelvis", rest_direction=np.array([0.3, -1.0, 0.0]))
+
+    # Left leg (extends down, -Y; slight forward bend at knee/ankle)
     skel.add_bone(
         "left_upper_leg", parent="left_hip",
-        rest_direction=np.array([-0.2, -1.0, 0.0]),
+        rest_direction=np.array([0.0, -1.0, 0.0]),
     )
     skel.add_bone(
         "left_lower_leg", parent="left_upper_leg",
-        rest_direction=np.array([0.0, -1.0, 0.1]),
+        rest_direction=np.array([0.0, -1.0, 0.05]),
     )
     skel.add_bone(
         "left_foot", parent="left_lower_leg",
         rest_direction=np.array([0.0, -1.0, 0.2]),
     )
 
-    # Right leg
-    skel.add_bone("right_hip", parent="pelvis", rest_direction=_right())
+    # Right leg (mirrors left)
     skel.add_bone(
         "right_upper_leg", parent="right_hip",
-        rest_direction=np.array([0.2, -1.0, 0.0]),
+        rest_direction=np.array([0.0, -1.0, 0.0]),
     )
     skel.add_bone(
         "right_lower_leg", parent="right_upper_leg",
-        rest_direction=np.array([0.0, -1.0, 0.1]),
+        rest_direction=np.array([0.0, -1.0, 0.05]),
     )
     skel.add_bone(
         "right_foot", parent="right_lower_leg",

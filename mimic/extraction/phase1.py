@@ -34,17 +34,37 @@ def extract(video_path: Path, output_path: Path | None = None) -> Path:
     print("Running MediaPipe Pose Landmarker...")
     result = extract_landmarks(frames, fps=source_fps)
 
+    world = result["world_landmarks"]
+    vis = result["visibility"]
+    landmarks_2d = result["landmarks_2d"]
+
+    # Trim zero frames (MediaPipe returns all-zeros when no pose detected)
+    vis_sum = vis.sum(axis=1)
+    valid = vis_sum > 1.0
+    if not valid.all():
+        first_valid = int(np.argmax(valid))
+        last_valid = len(valid) - 1 - int(np.argmax(valid[::-1]))
+        print(f"Trimming frames 0-{first_valid - 1} and {last_valid + 1}-{len(valid) - 1} "
+              f"(no pose detected)")
+        world = world[first_valid:last_valid + 1]
+        vis = vis[first_valid:last_valid + 1]
+        landmarks_2d = landmarks_2d[first_valid:last_valid + 1]
+    else:
+        first_valid = 0
+        last_valid = len(valid) - 1
+
     np.savez_compressed(
         output_path,
-        world_landmarks=result["world_landmarks"],
-        landmarks_2d=result["landmarks_2d"],
-        visibility=result["visibility"],
+        world_landmarks=world,
+        landmarks_2d=landmarks_2d,
+        visibility=vis,
         fps=source_fps,
         landmark_names=result["landmark_names"],
+        first_frame=first_valid,
     )
     print(f"Saved landmarks to: {output_path}")
-    print(f"  Shape: {result['world_landmarks'].shape} "
-          f"({result['world_landmarks'].shape[0]} frames, "
-          f"{result['world_landmarks'].shape[1]} landmarks, 3 coords)")
+    print(f"  Shape: {world.shape} "
+          f"({world.shape[0]} frames, "
+          f"{world.shape[1]} landmarks, 3 coords)")
 
     return output_path

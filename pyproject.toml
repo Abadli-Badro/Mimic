@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Convert MP4 video of a person into glTF/GLB 3D animations using a Mixamo-compatible skeleton"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 authors = [{ name = "ABADLI Badreddine" }]
 dependencies = [
     "mediapipe>=0.10",
