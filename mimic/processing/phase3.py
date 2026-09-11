@@ -33,6 +33,7 @@ def solve(npz_path: Path, output_path: Path | None = None) -> Path:
     # Save rotations as individual arrays
     save_dict = {
         "num_frames": result["num_frames"],
+        "fps": data["fps"],
         "bone_names": np.array(result["bone_names"]),
     }
     for bone_name, quats in result["rotations"].items():

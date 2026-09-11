@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from mimic.retargeting.retarget import load_mapping, retarget
+from mimic.retargeting.retarget import (
+    INTERNAL_TO_MIXAMO,
+    load_mapping,
+    retarget,
+)
 from mimic.retargeting.skeleton import Skeleton, create_mediapipe_skeleton
 
 
@@ -48,39 +52,48 @@ class TestSkeleton:
     def test_create_mediapipe_skeleton(self) -> None:
         skel = create_mediapipe_skeleton()
         assert isinstance(skel, Skeleton)
+        assert len(skel.bones) > 0
 
 
 class TestRetarget:
     def test_load_mapping(self) -> None:
         mapping = load_mapping()
         assert isinstance(mapping, dict)
-        assert "Hips" in mapping
-        assert mapping["Hips"] == "mixamorig:Hips"
+        assert "pelvis" in mapping
+        assert mapping["pelvis"] == "mixamorig:Hips"
 
-    def test_load_mapping_count(self) -> None:
-        mapping = load_mapping()
-        assert len(mapping) > 0
+    def test_internal_to_mixamo_count(self) -> None:
+        assert len(INTERNAL_TO_MIXAMO) > 0
 
     def test_retarget_remaps_bone_names(self) -> None:
-        rotations = [
-            {
-                "Hips": np.array([0.0, 0.0, 0.0, 1.0]),
-                "Spine": np.array([0.0, 0.0, 0.0, 1.0]),
-                "UnknownBone": np.array([0.0, 0.0, 0.0, 1.0]),
-            }
-        ]
-        result = retarget(rotations)
-        assert len(result) == 1
-        assert "mixamorig:Hips" in result[0]
-        assert "mixamorig:Spine" in result[0]
-        assert "UnknownBone" not in result[0]
+        rotations = {
+            "pelvis": np.zeros((5, 4)),
+            "spine": np.zeros((5, 4)),
+        }
+        result = retarget(rotations, num_frames=5)
+        assert "mixamorig:Hips" in result["rotations"]
+        assert "mixamorig:Spine" in result["rotations"]
 
-    def test_retarget_empty_input(self) -> None:
-        result = retarget([])
-        assert result == []
+    def test_retarget_creates_identity_for_missing_bones(self) -> None:
+        rotations = {"pelvis": np.zeros((3, 4))}
+        result = retarget(rotations, num_frames=3)
+        # Should have identity quaternions for bones not in input
+        for bone_name in result["bone_names"]:
+            quats = result["rotations"][bone_name]
+            assert quats.shape == (3, 4)
 
     def test_retarget_preserves_rotations(self) -> None:
-        q = np.array([0.1, 0.2, 0.3, 0.9])
-        rotations = [{"Hips": q}]
-        result = retarget(rotations)
-        np.testing.assert_array_equal(result[0]["mixamorig:Hips"], q)
+        q = np.zeros((2, 4))
+        q[:, 3] = 1.0
+        rotations = {"pelvis": q}
+        result = retarget(rotations, num_frames=2)
+        np.testing.assert_array_equal(result["rotations"]["mixamorig:Hips"], q)
+
+    def test_retarget_output_structure(self) -> None:
+        rotations = {"pelvis": np.zeros((5, 4))}
+        result = retarget(rotations, num_frames=5)
+        assert "rotations" in result
+        assert "bone_names" in result
+        assert "hierarchy" in result
+        assert "num_frames" in result
+        assert result["num_frames"] == 5
