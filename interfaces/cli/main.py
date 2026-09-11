@@ -39,6 +39,22 @@ def extract(
 
 
 @app.command()
+def smooth(
+    npz: Path = typer.Argument(..., help="Path to extracted landmarks .npz file."),
+    output: Optional[Path] = typer.Option(None, "-o", "--output", help="Output .npz file path."),
+    min_cutoff: float = typer.Option(
+        1.0, "--min-cutoff", help="One-Euro min cutoff (higher=more smooth)."
+    ),
+    beta: float = typer.Option(0.007, "--beta", help="One-Euro speed coefficient."),
+) -> None:
+    """Phase 2: Smooth landmark trajectories to remove jitter."""
+    from mimic.processing.phase2 import smooth as do_smooth
+
+    result = do_smooth(npz_path=npz, output_path=output, min_cutoff=min_cutoff, beta=beta)
+    typer.echo(f"Smoothed landmarks saved to: {result}")
+
+
+@app.command()
 def convert(
     video: Path = typer.Argument(..., help="Path to input MP4 video file."),
     output: Optional[Path] = typer.Option(None, "-o", "--output", help="Output file path."),

@@ -13,6 +13,7 @@ authors = [{ name = "ABADLI Badreddine" }]
 dependencies = [
     "mediapipe>=0.10",
     "numpy>=1.24",
+    "scipy>=1.11",
     "pygltflib>=1.16",
     "typer>=0.9",
 ]
