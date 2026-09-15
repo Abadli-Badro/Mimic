@@ -112,17 +112,21 @@ def test_merge_preserves_bind_pose_and_transfers_world_delta(tmp_path):
     write_gltf(retarget(tracks)["rotations"],30,source)
     root_rest = Rotation.from_euler("y",25,degrees=True)
     arm_rest = Rotation.from_euler("z",-90,degrees=True)
-    g = pygltflib.GLTF2(nodes=[
-        pygltflib.Node(name="mixamorig_Hips",rotation=root_rest.as_quat().tolist(),children=[1]),
-        pygltflib.Node(name="mixamorig_LeftArm",rotation=arm_rest.as_quat().tolist()),
-    ], skins=[pygltflib.Skin(joints=[0,1])], scenes=[pygltflib.Scene(nodes=[0])],scene=0)
+    g = pygltflib.GLTF2.load(str(source))
+    g.animations.clear()
+    g.skins = [pygltflib.Skin(joints=list(range(len(g.nodes))))]
+    arm = next(i for i, node in enumerate(g.nodes) if node.name == 'mixamorig:LeftArm')
+    for node in g.nodes:
+        node.name = node.name.replace(':', '_')
+    g.nodes[0].rotation = root_rest.as_quat().tolist()
+    g.nodes[arm].rotation = arm_rest.as_quat().tolist()
     g.save_binary(str(model))
     merge_animation(model,source,out)
     merged = pygltflib.GLTF2.load(str(out))
     animated = {ch.target.node:Rotation.from_quat(read_track(merged,ch))
                 for ch in merged.animations[0].channels}
-    np.testing.assert_allclose(animated[1][0].as_matrix(),arm_rest.as_matrix(),atol=1e-6)
-    actual = animated[0][1]*animated[1][1]
+    np.testing.assert_allclose(animated[arm][0].as_matrix(),arm_rest.as_matrix(),atol=1e-6)
+    actual = animated[0][1]*animated[arm][1]
     expected = Rotation.from_euler("z",40,degrees=True)*root_rest*arm_rest
     np.testing.assert_allclose(actual.as_matrix(),expected.as_matrix(),atol=1e-6)
 
@@ -178,7 +182,7 @@ def test_empty_detection_is_reported(tmp_path, monkeypatch):
     monkeypatch.setattr(video_to_landmarks,'read_frames',lambda p:([None]*3,30.))
     monkeypatch.setattr(video_to_landmarks,'extract_landmarks',lambda frames,fps:dict(
         world_landmarks=np.zeros((3,33,3)),visibility=np.zeros((3,33)),
-        landmarks_2d=np.zeros((3,33,2)),landmark_names=[]))
+        landmarks_2d=np.zeros((3,33,2)),landmark_names=[str(i) for i in range(33)]))
     with pytest.raises(ValueError,match='No person detected'):
         video_to_landmarks.extract(tmp_path/'video.mp4',tmp_path/'raw.npz')
     assert not (tmp_path/'raw.npz').exists()

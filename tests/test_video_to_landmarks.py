@@ -51,9 +51,10 @@ def test_full_extraction(tmp_path: Path, monkeypatch) -> None:
     _create_test_video(video_path)
 
     output_path = tmp_path / "test_synthetic.npz"
+    from test_animation_regressions import pose
     from mimic.extraction import video_to_landmarks
     monkeypatch.setattr(video_to_landmarks, "extract_landmarks", lambda frames, fps: {
-        "world_landmarks": np.ones((30, 33, 3)),
+        "world_landmarks": np.stack([pose()] * 30),
         "visibility": np.ones((30, 33)),
         "landmarks_2d": np.ones((30, 33, 2)),
         "landmark_names": [str(i) for i in range(33)],

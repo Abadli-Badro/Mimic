@@ -5,6 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from mimic.config import output_file
+from mimic.errors import stage
+from mimic.artifacts import run_report, load_npz, output_path as check_output
+from mimic.validation import rotations as validate_rotations, number
 
 import numpy as np
 
@@ -17,6 +20,7 @@ from mimic.processing.landmarks_to_rotations import solve as do_solve
 from mimic.retargeting.retarget import retarget
 
 
+@stage("conversion")
 def run(
     video_path: Path,
     output_path: Path | None = None,
@@ -45,50 +49,64 @@ def run(
     if output_path is None:
         output_path = output_file(f"{video_path.stem}.{format}")
 
+    output_path = check_output(output_path, '.' + format, [video_path])
+    number(min_cutoff, 'min_cutoff')
+    number(beta, 'beta', inclusive=True)
+    if fps is not None:
+        number(fps, 'fps', maximum=240)
     work_dir = output_file("intermediate") / video_path.stem
     work_dir.mkdir(parents=True, exist_ok=True)
 
-    # Extract landmarks
-    print("Extracting landmarks...")
-    npz_path = do_extract(video_path, work_dir / "landmarks.npz")
+    with run_report(work_dir / "status.json") as report:
+        # Extract landmarks
+        print("Extracting landmarks...")
+        npz_path = do_extract(video_path, work_dir / "landmarks.npz")
 
-    # Smooth
-    print("Smoothing landmarks...")
-    smooth_path = do_smooth(npz_path, work_dir / "landmarks_smooth.npz", min_cutoff, beta)
+        # Smooth
+        report["stage"] = "smoothing"
+        print("Smoothing landmarks...")
+        smooth_path = do_smooth(npz_path, work_dir / "landmarks_smooth.npz", min_cutoff, beta)
 
-    # Solve rotations
-    print("Solving rotations...")
-    rot_path = do_solve(smooth_path, work_dir / "rotations.npz")
+        # Solve rotations
+        report["stage"] = "rotation solving"
+        print("Solving rotations...")
+        rot_path = do_solve(smooth_path, work_dir / "rotations.npz")
 
-    # Retarget to Mixamo
-    print("Retargeting to Mixamo skeleton...")
-    data = dict(np.load(rot_path, allow_pickle=True))
-    internal_rotations = {}
-    for key in data:
-        if key.startswith("rot_"):
-            bone_name = key[4:]
-            internal_rotations[bone_name] = data[key]
+        # Retarget to Mixamo
+        report["stage"] = "retargeting"
+        print("Retargeting to Mixamo skeleton...")
+        data = load_npz(rot_path)
+        internal_rotations = {}
+        for key in data:
+            if key.startswith("rot_"):
+                bone_name = key[4:]
+                internal_rotations[bone_name] = data[key]
 
-    output_fps = float(data["fps"])
-    num_frames = int(data["num_frames"])
-    if fps is not None and fps != output_fps and num_frames > 1:
-        source_times = np.arange(num_frames) / output_fps
-        target_times = np.arange(int(np.floor(source_times[-1] * fps)) + 1) / fps
-        internal_rotations = {
-            name: Slerp(source_times, Rotation.from_quat(quats))(target_times).as_quat()
-            for name, quats in internal_rotations.items()
-        }
-    if fps is not None:
-        output_fps = float(fps)
+        from mimic.processing.rotation_solver import BONE_HIERARCHY
+        validate_rotations(internal_rotations, BONE_HIERARCHY, data.get('num_frames'))
+        if 'fps' not in data or 'num_frames' not in data:
+            raise ValueError('Rotation file must contain fps and num_frames.')
+        output_fps = number(data['fps'], 'fps', maximum=240)
+        num_frames = int(data["num_frames"])
+        if fps is not None and fps != output_fps and num_frames > 1:
+            source_times = np.arange(num_frames) / output_fps
+            target_times = np.arange(int(np.floor(source_times[-1] * fps)) + 1) / fps
+            internal_rotations = {
+                name: Slerp(source_times, Rotation.from_quat(quats))(target_times).as_quat()
+                for name, quats in internal_rotations.items()
+            }
+        if fps is not None:
+            output_fps = float(fps)
 
-    print(f"Exporting as {format.upper()}...")
-    if format == "bvh":
-        write_bvh(internal_rotations, output_fps, output_path)
-    else:
-        result = retarget(internal_rotations)
-        write_gltf(result["rotations"], fps=output_fps, output_path=output_path,
-                   glb=(format == "glb"), bone_names=result["bone_names"],
-                   hierarchy=result["hierarchy"])
+        report["stage"] = "export"
+        print(f"Exporting as {format.upper()}...")
+        if format == "bvh":
+            write_bvh(internal_rotations, output_fps, output_path)
+        else:
+            result = retarget(internal_rotations)
+            write_gltf(result["rotations"], fps=output_fps, output_path=output_path,
+                       glb=(format == "glb"), bone_names=result["bone_names"],
+                       hierarchy=result["hierarchy"])
 
-    print(f"Done! Output: {output_path}")
-    return output_path
+        print(f"Done! Output: {output_path}")
+        return output_path

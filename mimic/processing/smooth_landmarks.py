@@ -5,12 +5,17 @@ from __future__ import annotations
 from pathlib import Path
 
 from mimic.config import output_file
+from mimic.errors import stage
+from mimic.artifacts import load_npz, save_npz, output_path as check_output
+from mimic.validation import landmarks
+from mimic.extraction.quality import validate_pose_quality
 
 import numpy as np
 
 from mimic.processing.smoothing import fill_landmark_gaps, smooth_landmarks_array
 
 
+@stage("smoothing")
 def smooth(
     npz_path: Path,
     output_path: Path | None = None,
@@ -31,7 +36,10 @@ def smooth(
     if output_path is None:
         output_path = output_file(npz_path.stem + "_smooth.npz")
 
-    data = dict(np.load(npz_path, allow_pickle=True))
+    output_path = check_output(output_path, ".npz", [npz_path])
+    data = load_npz(npz_path)
+    landmarks(data)
+    validate_pose_quality(data["world_landmarks"], data["visibility"], float(data["fps"]))
     world = data["world_landmarks"]
     fps = float(data["fps"])
 
@@ -45,7 +53,7 @@ def smooth(
     # 2D landmarks stay as-is (they're already in image space, smoothing would
     # misalign with the video if we did it here)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(
+    save_npz(
         output_path,
         world_landmarks=smoothed_world,
         landmarks_2d=data["landmarks_2d"],

@@ -67,15 +67,15 @@ class TestRetarget:
 
     def test_retarget_remaps_bone_names(self) -> None:
         rotations = {
-            "pelvis": np.zeros((5, 4)),
-            "spine": np.zeros((5, 4)),
+            "pelvis": np.tile([0., 0., 0., 1.], (5, 1)),
+            "spine": np.tile([0., 0., 0., 1.], (5, 1)),
         }
         result = retarget(rotations, num_frames=5)
         assert "mixamorig:Hips" in result["rotations"]
         assert "mixamorig:Spine" in result["rotations"]
 
     def test_retarget_creates_identity_for_missing_bones(self) -> None:
-        rotations = {"pelvis": np.zeros((3, 4))}
+        rotations = {"pelvis": np.tile([0., 0., 0., 1.], (3, 1))}
         result = retarget(rotations, num_frames=3)
         # Should have identity quaternions for bones not in input
         for bone_name in result["bone_names"]:
@@ -90,7 +90,7 @@ class TestRetarget:
         np.testing.assert_array_equal(result["rotations"]["mixamorig:Hips"], q)
 
     def test_retarget_output_structure(self) -> None:
-        rotations = {"pelvis": np.zeros((5, 4))}
+        rotations = {"pelvis": np.tile([0., 0., 0., 1.], (5, 1))}
         result = retarget(rotations, num_frames=5)
         assert "rotations" in result
         assert "bone_names" in result

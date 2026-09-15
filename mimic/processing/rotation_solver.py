@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import numpy as np
 from scipy.spatial.transform import Rotation
+from mimic.validation import hierarchy as validate_hierarchy, number
+from mimic.errors import MimicError
 
 # MediaPipe landmark indices
 LM_LEFT_HIP = 23
@@ -196,11 +198,20 @@ def solve_rotations(
     """
     from mimic.retargeting.skeleton import create_mediapipe_skeleton
 
+    validate_hierarchy(BONE_HIERARCHY)
+    number(visibility_threshold, 'visibility threshold', maximum=1, inclusive=True)
     landmarks = np.asarray(landmarks, dtype=float)
     if landmarks.ndim != 3 or landmarks.shape[1:] != (33, 3) or not len(landmarks):
         raise ValueError("Expected nonempty (frames, 33, 3) landmarks")
     if visibility is not None and np.shape(visibility) != landmarks.shape[:2]:
         raise ValueError("Visibility must have shape (frames, 33)")
+    if visibility is not None:
+        visibility = np.asarray(visibility, dtype=float)
+        if not np.isfinite(visibility).all() or np.any((visibility < 0) | (visibility > 1)):
+            raise MimicError('invalid_visibility', 'Visibility must contain finite values between 0 and 1.')
+    trusted = np.ones(landmarks.shape[:2], dtype=bool) if visibility is None else visibility >= visibility_threshold
+    if not np.isfinite(landmarks[trusted]).all():
+        raise MimicError('invalid_landmarks', 'Trusted landmarks contain nonfinite coordinates.')
     skel = create_mediapipe_skeleton()
     num_frames = len(landmarks)
     bone_rotations = {name: np.tile([0., 0., 0., 1.], (num_frames, 1)) for name in BONE_ORDER}

@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+from mimic.validation import rotations as validate_rotations
+from mimic.errors import stage
 
 MAPPING_PATH = Path(__file__).parent / "mixamo_mapping.json"
 
@@ -66,6 +68,7 @@ def load_mapping() -> dict[str, str]:
     return INTERNAL_TO_MIXAMO.copy()
 
 
+@stage("retargeting")
 def retarget(
     rotations: dict[str, np.ndarray],
     num_frames: int | None = None,
@@ -83,10 +86,8 @@ def retarget(
           - "hierarchy": dict mapping bone -> parent bone
           - "num_frames": int
     """
-    if num_frames is None:
-        for v in rotations.values():
-            num_frames = v.shape[0]
-            break
+    from mimic.processing.rotation_solver import BONE_HIERARCHY
+    num_frames = validate_rotations(rotations, BONE_HIERARCHY, num_frames)
 
     mixamo_rotations: dict[str, np.ndarray] = {}
     for internal_name, mixamo_name in INTERNAL_TO_MIXAMO.items():

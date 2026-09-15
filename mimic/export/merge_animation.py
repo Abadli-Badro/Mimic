@@ -8,9 +8,13 @@ from mimic.config import output_file
 
 import numpy as np
 import pygltflib
+from mimic.errors import MimicError, stage
+from mimic.artifacts import atomic_output, output_path as check_output
+from mimic.export import gltf_validation as validate
 from scipy.spatial.transform import Rotation
 
 
+@stage("model merge")
 def merge_animation(
     model_path: Path,
     animation_path: Path,
@@ -34,8 +38,21 @@ def merge_animation(
     """
     if output_path is None:
         output_path = output_file(animation_path.stem + "_animated.glb")
-    model = pygltflib.GLTF2().load(str(model_path))
-    anim_gltf = pygltflib.GLTF2().load(str(animation_path))
+    output_path = check_output(output_path, '.glb', [model_path, animation_path])
+    for source in [model_path, animation_path]:
+        if Path(source).suffix.lower() != '.glb':
+            raise MimicError('unsupported_input', 'Merge inputs must be embedded GLB files.')
+        if Path(source).stat().st_size > 250 * 1024**2:
+            raise MimicError('model_too_large', f'GLB exceeds 250 MiB: {source}')
+    model = validate.load_glb(model_path)
+    anim_gltf = validate.load_glb(animation_path)
+
+    validate.graph(model)
+    validate.graph(anim_gltf)
+    validate.buffers(model)
+    validate.buffers(anim_gltf)
+    validate.skins(model)
+    validate.animation(anim_gltf)
 
     if not anim_gltf.animations:
         raise ValueError(f"No animations in {animation_path}")
@@ -76,8 +93,24 @@ def merge_animation(
     print(f"Animation channels: {len(source_anim.channels)}")
     print(f"Matched bones: {len(matches)}")
 
-    if not matches:
-        raise ValueError("No matching bones found")
+    if len(matches) != len(source_anim.channels):
+        missing = [anim_gltf.nodes[ch.target.node].name for ch in source_anim.channels
+                   if anim_gltf.nodes[ch.target.node].name not in model_nodes]
+        raise MimicError('unmatched_bones', f'Target model is missing animated bones: {missing}')
+    target_parents, _ = validate.graph(model)
+    source_parents, _ = validate.graph(anim_gltf)
+    mapping = {source_anim.channels[ch].target.node: target for ch, _, target in matches}
+    target_sources = {v: k for k, v in mapping.items()}
+    for src, target in mapping.items():
+        src_parent = source_parents[src]
+        while src_parent is not None and src_parent not in mapping:
+            src_parent = source_parents[src_parent]
+        target_parent = target_parents[target]
+        while target_parent is not None and target_parent not in target_sources:
+            target_parent = target_parents[target_parent]
+        if mapping.get(src_parent) != target_parent:
+            raise MimicError('incompatible_hierarchy',
+                             f'Parent chain differs for {anim_gltf.nodes[src].name}. Use a compatible rig.')
 
     # Read source animation binary blob
     src_blob = anim_gltf.binary_blob()
@@ -87,14 +120,8 @@ def merge_animation(
     # Read timestamps
     ts_sampler_idx = matches[0][1]
     ts_acc_idx = source_anim.samplers[ts_sampler_idx].input
-    ts_acc = anim_gltf.accessors[ts_acc_idx]
-    ts_bv = anim_gltf.bufferViews[ts_acc.bufferView]
-    ts_offset = (ts_bv.byteOffset or 0) + (ts_acc.byteOffset or 0)
-    timestamps = np.frombuffer(
-        src_blob[ts_offset:ts_offset + ts_acc.count * 4],
-        dtype=np.float32,
-    )
-    num_frames = ts_acc.count
+    timestamps = validate.float_accessor(anim_gltf, ts_acc_idx, 'SCALAR')[:,0]
+    num_frames = len(timestamps)
     fps = float(num_frames - 1) / float(timestamps[-1]) if timestamps[-1] > 0 else 30.0
 
     # Read full source rotations, including unanimated ancestors.
@@ -272,7 +299,8 @@ def merge_animation(
     model.set_binary_blob(combined)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    model.save_binary(str(output_path))
+    with atomic_output(output_path) as temporary:
+        model.save_binary(str(temporary))
     print(f"Saved: {output_path}")
     print(f"  {len(bone_order)} bones animated, {num_frames} frames @ {fps:.1f} fps")
     print(f"  File size: {output_path.stat().st_size / 1024:.0f} KB")

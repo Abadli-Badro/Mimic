@@ -5,6 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from mimic.config import output_file
+from mimic.errors import stage, MimicError
+from mimic.artifacts import load_npz, atomic_output, output_path as check_output
+from mimic.validation import landmarks, number
+from mimic.extraction.video_reader import get_video_info
 
 import cv2
 import numpy as np
@@ -62,6 +66,7 @@ def draw_skeleton(
     return annotated
 
 
+@stage("overlay export")
 def generate_overlay_video(
     video_path: Path,
     npz_path: Path,
@@ -84,43 +89,60 @@ def generate_overlay_video(
     if output_path is None:
         output_path = output_file(video_path.stem + "_overlay.mp4")
 
-    data = dict(np.load(npz_path, allow_pickle=True))
-    landmarks_2d = data["landmarks_2d"]
-    visibility = data["visibility"]
-
+    output_path = check_output(output_path, '.mp4', [video_path, npz_path])
+    number(threshold, 'visibility threshold', maximum=1, inclusive=True)
+    data = load_npz(npz_path)
+    landmarks(data, overlay=True)
+    landmarks_2d, visibility = data['landmarks_2d'], data['visibility']
+    if np.any(np.abs(landmarks_2d) > 10):
+        raise MimicError('invalid_landmarks', 'Overlay coordinates must be normalized image coordinates.')
+    info = get_video_info(video_path)
+    first_frame = int(data.get('first_frame', 0))
+    if first_frame + len(landmarks_2d) > info['total_frames']:
+        raise MimicError('frame_count_mismatch', 'Landmark sequence extends beyond the source video.')
+    width, height = info['width'], info['height']
+    source_fps = number(fps if fps is not None else info['fps'], 'fps', maximum=240)
     cap = cv2.VideoCapture(str(video_path))
-    if not cap.isOpened():
-        raise FileNotFoundError(f"Cannot open video: {video_path}")
-
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    source_fps = fps or cap.get(cv2.CAP_PROP_FPS)
-
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    writer = cv2.VideoWriter(str(output_path), fourcc, source_fps, (width, height))
-
-    first_frame = int(data.get("first_frame", 0))
-    frame_idx = 0
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        pose_idx = frame_idx - first_frame
-        if 0 <= pose_idx < landmarks_2d.shape[0]:
-            annotated = draw_skeleton(
-                frame, landmarks_2d[pose_idx], visibility[pose_idx],
-                width, height, threshold,
-            )
-        else:
-            annotated = frame
-
-        writer.write(annotated)
-        frame_idx += 1
-
-    cap.release()
-    writer.release()
+    writer = None
+    try:
+        if not cap.isOpened():
+            raise MimicError('video_decode', f'Cannot open video: {video_path}')
+        with atomic_output(output_path) as temporary:
+            writer = cv2.VideoWriter(str(temporary), cv2.VideoWriter_fourcc(*'mp4v'),
+                                     source_fps, (width, height))
+            try:
+                if not writer.isOpened():
+                    raise MimicError('video_encode', 'Cannot initialize MP4 encoder. Check codec availability and output permissions.')
+                frame_idx = 0
+                while True:
+                    ok, frame = cap.read()
+                    if not ok:
+                        break
+                    if frame is None or frame.shape != (height,width,3):
+                        raise MimicError('video_decode', f'Invalid video frame {frame_idx}.')
+                    pose_idx = frame_idx - first_frame
+                    if 0 <= pose_idx < len(landmarks_2d):
+                        frame = draw_skeleton(frame, landmarks_2d[pose_idx], visibility[pose_idx],
+                                              width, height, threshold)
+                    writer.write(frame)
+                    frame_idx += 1
+                    if frame_idx > info['total_frames']:
+                        raise MimicError('video_metadata', 'Video frame count changed during overlay export.')
+            finally:
+                writer.release()
+                writer = None
+            if frame_idx != info['total_frames']:
+                raise MimicError('truncated_video', 'Video decoding stopped early during overlay export.')
+            check = cv2.VideoCapture(str(temporary))
+            try:
+                if not check.isOpened() or int(check.get(cv2.CAP_PROP_FRAME_COUNT)) != frame_idx:
+                    raise MimicError('video_encode', 'MP4 encoder did not write all overlay frames.')
+            finally:
+                check.release()
+    finally:
+        cap.release()
+        if writer is not None:
+            writer.release()
     return output_path
 
 

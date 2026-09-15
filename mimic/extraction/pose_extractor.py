@@ -11,6 +11,8 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 from mimic.config import MEDIAPIPE_MODEL_PATH
+from mimic.errors import MimicError
+from mimic.validation import number
 
 # MediaPipe Pose Landmarker 33 landmark names (index order)
 LANDMARK_NAMES = [
@@ -89,10 +91,20 @@ def extract_landmarks(
             "pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task"
         )
 
+    if not frames:
+        raise MimicError('empty_video', 'No frames were supplied for pose detection.')
+    if fps is not None:
+        number(fps, 'fps', maximum=240)
+    for i, frame in enumerate(frames):
+        if (not isinstance(frame, np.ndarray) or frame.ndim != 3
+                or frame.shape[2] != 3 or frame.dtype != np.uint8 or not frame.size):
+            raise MimicError('invalid_video_frame', f'Frame {i} must be a nonempty uint8 BGR image.')
+
     base_options = python.BaseOptions(model_asset_path=str(model))
     options = vision.PoseLandmarkerOptions(
         base_options=base_options,
         running_mode=vision.RunningMode.VIDEO,
+        num_poses=2,
     )
 
     all_world = []
@@ -106,6 +118,10 @@ def extract_landmarks(
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
             result = landmarker.detect_for_video(mp_image, timestamp_ms)
 
+            if len(result.pose_world_landmarks) > 1 or len(result.pose_landmarks) > 1:
+                raise MimicError('multiple_people',
+                                 f'Multiple people detected at frame {i} ({timestamp_ms / 1000:.2f}s). '
+                                 'Use a clip showing only one person.')
             if result.pose_world_landmarks:
                 lm = result.pose_world_landmarks[0]
                 coords = np.array([[p.x, -p.y, -p.z] for p in lm])

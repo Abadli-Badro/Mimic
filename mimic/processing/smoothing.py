@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+from mimic.validation import number
 
 
 class OneEuroFilter:
@@ -26,6 +27,10 @@ class OneEuroFilter:
             beta: Speed coefficient (higher = less lag on fast motion).
             d_cutoff: Cutoff frequency for the derivative.
         """
+        number(fps, "fps")
+        number(min_cutoff, "min_cutoff")
+        number(beta, "beta", inclusive=True)
+        number(d_cutoff, "d_cutoff")
         self.fps = fps
         self.min_cutoff = min_cutoff
         self.beta = beta

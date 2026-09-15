@@ -6,6 +6,9 @@ from pathlib import Path
 
 import numpy as np
 import pygltflib
+from mimic.errors import MimicError, stage
+from mimic.validation import hierarchy as validate_hierarchy, rotations as validate_rotations, number
+from mimic.artifacts import atomic_output, output_path as check_output
 
 from mimic.retargeting.retarget import INTERNAL_TO_MIXAMO, MIXAMO_HIERARCHY
 from mimic.retargeting.skeleton import JOINT_OFFSETS
@@ -13,17 +16,10 @@ from mimic.retargeting.skeleton import JOINT_OFFSETS
 
 def _collect_bone_order(hierarchy: dict) -> list[str]:
     """Collect bones in parent-first order."""
-    order = []
-    queue = [name for name, parent in hierarchy.items() if parent is None]
-    while queue:
-        bone = queue.pop(0)
-        order.append(bone)
-        for child, parent in hierarchy.items():
-            if parent == bone and child not in order:
-                queue.append(child)
-    return order
+    return validate_hierarchy(hierarchy)
 
 
+@stage("GLB/glTF export")
 def write_gltf(
     rotations: dict[str, np.ndarray],
     fps: float,
@@ -51,19 +47,13 @@ def write_gltf(
     if bone_names is None:
         bone_names = list(rotations.keys())
 
-    # Determine frame count
-    num_frames = 0
-    for v in rotations.values():
-        num_frames = v.shape[0]
-        break
+    output_path = check_output(output_path, '.glb' if glb else '.gltf')
+    number(fps, 'fps', maximum=240)
+    num_frames = validate_rotations(rotations, hierarchy)
+    for name, parent in hierarchy.items():
+        if name not in MIXAMO_HIERARCHY or parent != MIXAMO_HIERARCHY[name]:
+            raise MimicError('incompatible_skeleton', f'No supported rest skeleton for {name!r} with parent {parent!r}.')
 
-    if not np.isfinite(fps) or fps <= 0 or num_frames < 1:
-        raise ValueError("Expected positive fps and at least one animation frame")
-    for quats in rotations.values():
-        if np.shape(quats) != (num_frames, 4) or not np.isfinite(quats).all():
-            raise ValueError("Expected finite quaternion tracks with equal frame counts")
-        if np.any(np.linalg.norm(quats, axis=1) < 1e-8):
-            raise ValueError("Zero quaternion is not a rotation")
     rotations = {name: q / np.linalg.norm(q, axis=1, keepdims=True)
                  for name, q in rotations.items()}
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -190,8 +180,11 @@ def write_gltf(
     # Set binary data
     gltf.set_binary_blob(combined)
 
-    # Save
-    if glb:
-        gltf.save_binary(str(output_path))
-    else:
-        gltf.save(str(output_path))
+    # Embedded JSON buffers keep glTF publication a single atomic file too.
+    if not glb:
+        gltf.convert_buffers(pygltflib.BufferFormat.DATAURI)
+    with atomic_output(output_path) as temporary:
+        if glb:
+            gltf.save_binary(str(temporary))
+        else:
+            gltf.save_json(str(temporary))

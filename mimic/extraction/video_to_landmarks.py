@@ -5,6 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from mimic.config import output_file
+from mimic.errors import stage
+from mimic.artifacts import output_path as check_output, save_npz
+from mimic.validation import landmarks
+from mimic.extraction.quality import validate_pose_quality
 
 import numpy as np
 
@@ -12,6 +16,7 @@ from mimic.extraction.pose_extractor import extract_landmarks
 from mimic.extraction.video_reader import get_video_info, read_frames
 
 
+@stage("extraction")
 def extract(video_path: Path, output_path: Path | None = None) -> Path:
     """Extract pose landmarks from a video and save to .npz.
 
@@ -25,6 +30,7 @@ def extract(video_path: Path, output_path: Path | None = None) -> Path:
     if output_path is None:
         output_path = output_file(video_path.stem + ".npz")
 
+    output_path = check_output(output_path, ".npz", [video_path])
     info = get_video_info(video_path)
     print(f"Video: {video_path.name} ({info['width']}x{info['height']}, "
           f"{info['fps']:.1f} fps, {info['total_frames']} frames, "
@@ -40,25 +46,16 @@ def extract(video_path: Path, output_path: Path | None = None) -> Path:
     vis = result["visibility"]
     landmarks_2d = result["landmarks_2d"]
 
-    # Trim zero frames (MediaPipe returns all-zeros when no pose detected)
-    vis_sum = vis.sum(axis=1)
-    valid = vis_sum > 1.0
-    if not valid.any():
-        raise ValueError("No person detected in the video")
-    if not valid.all():
-        first_valid = int(np.argmax(valid))
-        last_valid = len(valid) - 1 - int(np.argmax(valid[::-1]))
-        print(f"Trimming frames 0-{first_valid - 1} and {last_valid + 1}-{len(valid) - 1} "
-              f"(no pose detected)")
-        world = world[first_valid:last_valid + 1]
-        vis = vis[first_valid:last_valid + 1]
-        landmarks_2d = landmarks_2d[first_valid:last_valid + 1]
-    else:
-        first_valid = 0
-        last_valid = len(valid) - 1
+    landmarks({**result, 'fps': source_fps})
+    first_valid, last_valid = validate_pose_quality(world, vis, source_fps)
+    if first_valid or last_valid != len(world) - 1:
+        print(f"Keeping source frames {first_valid}-{last_valid} (trimming undetected edges)")
+    world = world[first_valid:last_valid + 1]
+    vis = vis[first_valid:last_valid + 1]
+    landmarks_2d = landmarks_2d[first_valid:last_valid + 1]
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(
+    save_npz(
         output_path,
         world_landmarks=world,
         landmarks_2d=landmarks_2d,

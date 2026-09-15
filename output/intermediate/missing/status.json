@@ -1,0 +1,7 @@
+{
+  "status": "failed",
+  "stage": "extraction",
+  "started_at": "2026-09-15T19:28:10.320743+00:00",
+  "error": "extraction: [io_error] Video file not found: C:\\Users\\BAH\\AppData\\Local\\Temp\\pytest-of-BAH\\pytest-41\\test_cli_expected_failure_has_0\\missing.mp4",
+  "code": "io_error"
+}

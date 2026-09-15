@@ -5,6 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+from mimic.errors import stage
+from mimic.validation import hierarchy as validate_hierarchy, rotations as validate_rotations, number
+from mimic.artifacts import atomic_output, output_path as check_output
 
 from mimic.processing.rotation_solver import BONE_HIERARCHY
 
@@ -20,16 +23,7 @@ JOINT_OFFSETS = {name: tuple(100 * v for v in offset) for name, offset in REST_O
 
 def _get_joint_order() -> list[str]:
     """Channel order must match recursive hierarchy declaration order."""
-    order = []
-
-    def visit(joint):
-        order.append(joint)
-        for child, parent in BONE_HIERARCHY.items():
-            if parent == joint:
-                visit(child)
-
-    visit("pelvis")
-    return order
+    return validate_hierarchy(BONE_HIERARCHY)
 
 
 def _write_joint(f, name: str, offset: tuple, is_root: bool = False) -> None:
@@ -61,6 +55,7 @@ def _write_joint(f, name: str, offset: tuple, is_root: bool = False) -> None:
     f.write("}\n")
 
 
+@stage("BVH export")
 def write_bvh(
     rotations: dict[str, np.ndarray],
     fps: float,
@@ -75,20 +70,12 @@ def write_bvh(
         output_path: Path to write the .bvh file.
         num_frames: Number of frames. If None, inferred from rotations.
     """
-    if num_frames is None:
-        for v in rotations.values():
-            num_frames = v.shape[0]
-            break
-
-    if not np.isfinite(fps) or fps <= 0 or not num_frames:
-        raise ValueError("Expected positive fps and at least one animation frame")
-    for quats in rotations.values():
-        if np.shape(quats) != (num_frames, 4) or not np.isfinite(quats).all():
-            raise ValueError("Expected finite quaternion tracks with equal frame counts")
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    number(fps, 'fps', maximum=240)
+    output_path = check_output(output_path, '.bvh')
+    num_frames = validate_rotations(rotations, BONE_HIERARCHY, num_frames)
     joint_order = _get_joint_order()
 
-    with open(output_path, "w") as f:
+    with atomic_output(output_path) as temporary, temporary.open('w') as f:
         # Hierarchy
         f.write("HIERARCHY\n")
         _write_joint(f, "pelvis", JOINT_OFFSETS["pelvis"], is_root=True)

@@ -5,12 +5,17 @@ from __future__ import annotations
 from pathlib import Path
 
 from mimic.config import output_file
+from mimic.errors import stage
+from mimic.artifacts import load_npz, save_npz, output_path as check_output
+from mimic.validation import landmarks
+from mimic.extraction.quality import validate_pose_quality
 
 import numpy as np
 
 from mimic.processing.rotation_solver import solve_rotations
 
 
+@stage("rotation solving")
 def solve(npz_path: Path, output_path: Path | None = None) -> Path:
     """Solve bone rotations from smoothed landmarks.
 
@@ -24,7 +29,10 @@ def solve(npz_path: Path, output_path: Path | None = None) -> Path:
     if output_path is None:
         output_path = output_file(npz_path.stem.removesuffix("_smooth") + "_rotations.npz")
 
-    data = dict(np.load(npz_path, allow_pickle=True))
+    output_path = check_output(output_path, ".npz", [npz_path])
+    data = load_npz(npz_path)
+    landmarks(data)
+    validate_pose_quality(data["world_landmarks"], data["visibility"], float(data["fps"]))
     world = data["world_landmarks"]
     visibility = data["visibility"]
 
@@ -43,7 +51,7 @@ def solve(npz_path: Path, output_path: Path | None = None) -> Path:
         save_dict[f"rot_{bone_name}"] = quats
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(output_path, **save_dict)
+    save_npz(output_path, **save_dict)
     print(f"Saved rotations to: {output_path}")
     print(f"  {len(result['bone_names'])} bones, {result['num_frames']} frames")
     return output_path
