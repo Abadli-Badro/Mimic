@@ -10,19 +10,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-from mimic.extraction.pose_extractor import LANDMARK_NAMES
-
-# MediaPipe pose skeleton connections (pairs of landmark indices)
-POSE_CONNECTIONS = [
-    (11, 12), (11, 13), (13, 15), (12, 14), (14, 16),  # arms
-    (11, 23), (12, 24), (23, 24),  # torso
-    (23, 25), (25, 27), (27, 29), (27, 30),  # left leg
-    (24, 26), (26, 28), (28, 30), (28, 31),  # right leg
-    (0, 1), (1, 2), (2, 3),  # left eye
-    (0, 4), (4, 5), (5, 6),  # right eye
-    (0, 7), (0, 8),  # ears
-    (9, 10),  # mouth
-]
+from mimic.extraction.pose_extractor import LANDMARK_NAMES, POSE_CONNECTIONS
 
 
 def plot_landmarks_3d(

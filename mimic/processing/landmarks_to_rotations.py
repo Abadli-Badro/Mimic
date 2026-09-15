@@ -1,8 +1,10 @@
-"""Phase 3: Solve bone rotations from smoothed landmarks."""
+"""Solve bone rotations from smoothed landmarks."""
 
 from __future__ import annotations
 
 from pathlib import Path
+
+from mimic.config import output_file
 
 import numpy as np
 
@@ -20,7 +22,7 @@ def solve(npz_path: Path, output_path: Path | None = None) -> Path:
         Path to the saved rotations .npz file.
     """
     if output_path is None:
-        output_path = npz_path.with_name(npz_path.stem.replace("_smooth", "") + "_rotations.npz")
+        output_path = output_file(npz_path.stem.removesuffix("_smooth") + "_rotations.npz")
 
     data = dict(np.load(npz_path, allow_pickle=True))
     world = data["world_landmarks"]
@@ -34,11 +36,13 @@ def solve(npz_path: Path, output_path: Path | None = None) -> Path:
     save_dict = {
         "num_frames": result["num_frames"],
         "fps": data["fps"],
+        "first_frame": data.get("first_frame", 0),
         "bone_names": np.array(result["bone_names"]),
     }
     for bone_name, quats in result["rotations"].items():
         save_dict[f"rot_{bone_name}"] = quats
 
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(output_path, **save_dict)
     print(f"Saved rotations to: {output_path}")
     print(f"  {len(result['bone_names'])} bones, {result['num_frames']} frames")

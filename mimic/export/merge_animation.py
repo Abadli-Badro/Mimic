@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from mimic.config import output_file
+
 import numpy as np
 import pygltflib
 from scipy.spatial.transform import Rotation
@@ -12,13 +14,13 @@ from scipy.spatial.transform import Rotation
 def merge_animation(
     model_path: Path,
     animation_path: Path,
-    output_path: Path,
+    output_path: Path | None = None,
 ) -> Path:
     """Take animation keyframes from one GLB and apply them to another GLB's matching nodes.
 
-    Pre-multiplies each bone's animation rotation by the model's rest rotation,
-    so that the animation correctly replaces the node's rotation in glTF
-    (where animation channels OVERRIDE node.rotation, they don't combine with it).
+    Transfers world-space rotation deltas from the canonical source skeleton
+    to the target's rest frames, then recovers target-local rotations through
+    the hierarchy. Animation channels replace the target local rotation.
 
     Also strips any existing animations from the model to avoid conflicts.
 
@@ -30,6 +32,8 @@ def merge_animation(
     Returns:
         Path to output file.
     """
+    if output_path is None:
+        output_path = output_file(animation_path.stem + "_animated.glb")
     model = pygltflib.GLTF2().load(str(model_path))
     anim_gltf = pygltflib.GLTF2().load(str(animation_path))
 
@@ -61,7 +65,7 @@ def merge_animation(
     matches: list[tuple[int, int, int]] = []  # (channel_idx, source_sampler_idx, model_node_idx)
     for ch_idx, channel in enumerate(source_anim.channels):
         src_node = anim_gltf.nodes[channel.target.node]
-        if src_node.name in model_nodes:
+        if channel.target.path == "rotation" and src_node.name in model_nodes:
             matches.append((
                 ch_idx,
                 channel.sampler,
@@ -85,7 +89,7 @@ def merge_animation(
     ts_acc_idx = source_anim.samplers[ts_sampler_idx].input
     ts_acc = anim_gltf.accessors[ts_acc_idx]
     ts_bv = anim_gltf.bufferViews[ts_acc.bufferView]
-    ts_offset = ts_bv.byteOffset + (ts_acc.byteOffset or 0)
+    ts_offset = (ts_bv.byteOffset or 0) + (ts_acc.byteOffset or 0)
     timestamps = np.frombuffer(
         src_blob[ts_offset:ts_offset + ts_acc.count * 4],
         dtype=np.float32,
@@ -93,33 +97,76 @@ def merge_animation(
     num_frames = ts_acc.count
     fps = float(num_frames - 1) / float(timestamps[-1]) if timestamps[-1] > 0 else 30.0
 
-    # Read per-bone keyframe data, pre-multiply by model rest rotations
-    bone_quats: dict[int, np.ndarray] = {}
-    rest_count = 0
-    for ch_idx, sampler_idx, model_node_idx in matches:
-        sampler = source_anim.samplers[sampler_idx]
-        out_acc = anim_gltf.accessors[sampler.output]
-        out_bv = anim_gltf.bufferViews[out_acc.bufferView]
-        out_offset = out_bv.byteOffset + (out_acc.byteOffset or 0)
-        data = np.frombuffer(
-            src_blob[out_offset:out_offset + out_acc.count * 16],
-            dtype=np.float32,
-        ).reshape(out_acc.count, 4).copy()
+    # Read full source rotations, including unanimated ancestors.
+    def read_quats(sampler):
+        acc = anim_gltf.accessors[sampler.output]
+        bv = anim_gltf.bufferViews[acc.bufferView]
+        if (sampler.interpolation not in (None, "LINEAR") or acc.type != "VEC4"
+                or acc.componentType != pygltflib.FLOAT or acc.count != num_frames
+                or acc.sparse is not None):
+            raise ValueError("Merge requires dense LINEAR quaternion tracks with a shared timeline")
+        if sampler.input != ts_acc_idx:
+            raise ValueError("Merge requires a shared timeline")
+        return np.ndarray((acc.count, 4), dtype="<f4", buffer=src_blob,
+                          offset=(bv.byteOffset or 0) + (acc.byteOffset or 0),
+                          strides=(bv.byteStride or 16, 4)).copy()
 
-        # Pre-multiply by model rest rotation
-        model_node = model.nodes[model_node_idx]
-        rest_q = np.array(model_node.rotation if model_node.rotation else [0.0, 0.0, 0.0, 1.0])
-        if not np.allclose(rest_q, [0, 0, 0, 1], atol=0.001):
-            rest_rot = Rotation.from_quat(rest_q)
-            for frame_idx in range(data.shape[0]):
-                solver_q = data[frame_idx]
-                final_rot = rest_rot * Rotation.from_quat(solver_q)
-                data[frame_idx] = final_rot.as_quat()
-            rest_count += 1
+    source_tracks = {}
+    for channel in source_anim.channels:
+        if channel.target.path == "rotation":
+            source_tracks[channel.target.node] = Rotation.from_quat(
+                read_quats(source_anim.samplers[channel.sampler]))
+        else:
+            raise ValueError("Merge currently supports rotation-only source animation")
 
-        bone_quats[ch_idx] = data.copy()
+    def local_rest(node):
+        if node.matrix:
+            raise ValueError("Decompose matrix node transforms to TRS before merging")
+        return Rotation.from_quat(node.rotation or [0, 0, 0, 1])
 
-    print(f"Pre-multiplied rest rotations for {rest_count} bones")
+    def parents_and_order(nodes):
+        parents = {child: i for i, node in enumerate(nodes) for child in node.children or []}
+        order = []
+        def visit(i):
+            order.append(i)
+            for child in nodes[i].children or []:
+                visit(child)
+        for i in range(len(nodes)):
+            if i not in parents:
+                visit(i)
+        return parents, order
+
+    src_parents, src_order = parents_and_order(anim_gltf.nodes)
+    src_rest, src_world = {}, {}
+    for i in src_order:
+        parent = src_parents.get(i)
+        rest = local_rest(anim_gltf.nodes[i])
+        src_rest[i] = src_rest.get(parent, Rotation.identity()) * rest
+        src_world[i] = src_world.get(parent, Rotation.identity()) * source_tracks.get(i, rest)
+
+    target_parents, target_order = parents_and_order(model.nodes)
+    source_for_target = {target: source_anim.channels[ch].target.node for ch, _, target in matches}
+    target_rest, target_world, target_local = {}, {}, {}
+    for i in target_order:
+        parent = target_parents.get(i)
+        rest = local_rest(model.nodes[i])
+        target_rest[i] = target_rest.get(parent, Rotation.identity()) * rest
+        parent_world = target_world.get(parent, Rotation.identity())
+        if i in source_for_target:
+            src = source_for_target[i]
+            delta = src_world[src] * src_rest[src].inv()
+            target_world[i] = delta * target_rest[i]
+            target_local[i] = parent_world.inv() * target_world[i]
+        else:
+            target_world[i] = parent_world * rest
+
+    bone_quats = {}
+    for ch_idx, _, target in matches:
+        data = target_local[target].as_quat()
+        for frame_idx in range(1, len(data)):
+            if np.dot(data[frame_idx - 1], data[frame_idx]) < 0:
+                data[frame_idx] *= -1
+        bone_quats[ch_idx] = data
 
     # Build timestamp and keyframe bytes
     timestamp_bytes = timestamps.tobytes()
@@ -138,6 +185,7 @@ def merge_animation(
     model_blob = model.binary_blob()
     if model_blob is None:
         model_blob = b""
+    model_blob += b"\x00" * (-len(model_blob) % 4)
     model_blob_size = len(model_blob)
 
     # Append animation data after existing mesh data
@@ -156,7 +204,6 @@ def merge_animation(
             buffer=0,
             byteOffset=model_blob_size,
             byteLength=len(timestamp_bytes),
-            target=pygltflib.ARRAY_BUFFER,
         )
     )
     kf_bv_idx = len(model.bufferViews)
@@ -165,7 +212,6 @@ def merge_animation(
             buffer=0,
             byteOffset=model_blob_size + len(timestamp_bytes),
             byteLength=len(keyframe_bytes),
-            target=pygltflib.ARRAY_BUFFER,
         )
     )
 
@@ -200,7 +246,7 @@ def merge_animation(
         kf_offset += num_frames * 4 * 4
 
     # Create animation on the model
-    anim = pygltflib.Animation(name="sneaky_walk")
+    anim = pygltflib.Animation(name=source_anim.name or "mimic_animation")
     for i, bone_name in enumerate(bone_order):
         sampler_idx = len(anim.samplers)
         anim.samplers.append(
@@ -237,6 +283,6 @@ if __name__ == "__main__":
     import sys
 
     model = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("data/models/model.glb")
-    anim = Path(sys.argv[2]) if len(sys.argv) > 2 else Path("data/input/sneaky_walk.glb")
-    out = Path(sys.argv[3]) if len(sys.argv) > 3 else Path("data/output/sneaky_walk_animated.glb")
+    anim = Path(sys.argv[2]) if len(sys.argv) > 2 else output_file("sneaky_walk.glb")
+    out = Path(sys.argv[3]) if len(sys.argv) > 3 else output_file("sneaky_walk_animated.glb")
     merge_animation(model, anim, out)

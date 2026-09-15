@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+
+from mimic.config import output_file
 from typing import Optional
 
 import typer
@@ -18,18 +20,18 @@ def extract(
         False, "-v", "--visualize", help="Save 3D scatter plots of landmarks."
     ),
 ) -> None:
-    """Phase 1: Extract pose landmarks from a video to .npz."""
-    from mimic.extraction.phase1 import extract as do_extract
+    """Extract pose landmarks from a video to .npz."""
+    from mimic.extraction.video_to_landmarks import extract as do_extract
 
     result = do_extract(video_path=video, output_path=output)
 
     if visualize:
         import numpy as np
 
-        from mimic.extraction.visualize import plot_landmarks_all_frames
+        from mimic.extraction.landmark_plots import plot_landmarks_all_frames
 
         data = dict(np.load(result, allow_pickle=True))
-        vis_dir = result.parent / "visualize"
+        vis_dir = output_file("previews") / video.stem
         saved = plot_landmarks_all_frames(
             data["world_landmarks"],
             output_dir=vis_dir,
@@ -43,12 +45,12 @@ def smooth(
     npz: Path = typer.Argument(..., help="Path to extracted landmarks .npz file."),
     output: Optional[Path] = typer.Option(None, "-o", "--output", help="Output .npz file path."),
     min_cutoff: float = typer.Option(
-        1.0, "--min-cutoff", help="One-Euro min cutoff (higher=more smooth)."
+        1.0, "--min-cutoff", help="One-Euro min cutoff (lower=more smooth)."
     ),
     beta: float = typer.Option(0.007, "--beta", help="One-Euro speed coefficient."),
 ) -> None:
-    """Phase 2: Smooth landmark trajectories to remove jitter."""
-    from mimic.processing.phase2 import smooth as do_smooth
+    """Smooth landmark trajectories to remove jitter."""
+    from mimic.processing.smooth_landmarks import smooth as do_smooth
 
     result = do_smooth(npz_path=npz, output_path=output, min_cutoff=min_cutoff, beta=beta)
     typer.echo(f"Smoothed landmarks saved to: {result}")
@@ -59,7 +61,7 @@ def convert(
     video: Path = typer.Argument(..., help="Path to input MP4 video file."),
     output: Optional[Path] = typer.Option(None, "-o", "--output", help="Output file path."),
     fps: Optional[int] = typer.Option(None, "--fps", help="Target frame rate."),
-    format: str = typer.Option("glb", "-f", "--format", help="Output format: glb or gltf."),
+    format: str = typer.Option("glb", "-f", "--format", help="Output format: glb, gltf, or bvh."),
 ) -> None:
     """Convert a video of a person moving into a 3D glTF/GLB animation."""
     from mimic.pipeline import run
@@ -81,7 +83,7 @@ def visualize(
     from mimic.extraction.overlay import generate_overlay_video
 
     if npz is None:
-        npz = video.with_suffix(".npz")
+        npz = output_file(video.stem + ".npz")
     result = generate_overlay_video(video, npz, output, threshold=threshold)
     typer.echo(f"Overlay video saved to: {result}")
 
@@ -90,7 +92,7 @@ def visualize(
 def merge(
     model: Path = typer.Argument(..., help="Path to Mixamo rigged .glb model (T-pose)."),
     animation: Path = typer.Argument(..., help="Path to skeleton-only animation .glb."),
-    output: Path = typer.Option(..., "-o", "--output", help="Output animated .glb path."),
+    output: Optional[Path] = typer.Option(None, "-o", "--output", help="Output animated .glb path."),
 ) -> None:
     """Merge a skeleton animation onto a full rigged Mixamo model."""
     from mimic.export.merge_animation import merge_animation

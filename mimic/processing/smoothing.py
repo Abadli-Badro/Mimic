@@ -22,7 +22,7 @@ class OneEuroFilter:
 
         Args:
             fps: Signal frame rate.
-            min_cutoff: Minimum cutoff frequency (higher = more smoothing).
+            min_cutoff: Minimum cutoff frequency (lower = more smoothing).
             beta: Speed coefficient (higher = less lag on fast motion).
             d_cutoff: Cutoff frequency for the derivative.
         """
@@ -80,6 +80,25 @@ class OneEuroFilter:
         return x_hat
 
 
+def fill_landmark_gaps(landmarks, visibility=None, threshold=0.5):
+    """Interpolate unreliable samples before filtering; hold at clip edges.
+
+    An entirely unobserved landmark stays zero and remains low confidence.
+    """
+    values = np.asarray(landmarks, dtype=float).copy()
+    frames = np.arange(len(values))
+    for joint in range(values.shape[1]):
+        valid = np.isfinite(values[:, joint]).all(axis=1)
+        if visibility is not None:
+            valid &= np.asarray(visibility)[:, joint] >= threshold
+        if valid.any():
+            for dim in range(values.shape[2]):
+                values[:, joint, dim] = np.interp(frames, frames[valid], values[valid, joint, dim])
+        else:
+            values[:, joint] = 0
+    return values
+
+
 def smooth_landmarks_array(
     landmarks: np.ndarray,
     fps: float,
@@ -98,7 +117,7 @@ def smooth_landmarks_array(
         Smoothed array of the same shape.
     """
     num_frames, num_landmarks, dims = landmarks.shape
-    smoothed = np.empty_like(landmarks)
+    smoothed = np.empty(landmarks.shape, dtype=float)
 
     for lm_idx in range(num_landmarks):
         for dim in range(dims):

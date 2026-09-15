@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from mimic.config import output_file
+
 import numpy as np
 
 from mimic.export.gltf_writer import write_gltf
-from mimic.extraction.phase1 import extract as do_extract
-from mimic.processing.phase2 import smooth as do_smooth
-from mimic.processing.phase3 import solve as do_solve
+from mimic.export.bvh_writer import write_bvh
+from scipy.spatial.transform import Rotation, Slerp
+from mimic.extraction.video_to_landmarks import extract as do_extract
+from mimic.processing.smooth_landmarks import smooth as do_smooth
+from mimic.processing.landmarks_to_rotations import solve as do_solve
 from mimic.retargeting.retarget import retarget
 
 
@@ -25,7 +29,7 @@ def run(
 
     Args:
         video_path: Path to the input MP4 video.
-        output_path: Path for the output file. Defaults to video name with .glb extension.
+        output_path: Path for the output file. Defaults to output/<video name>.<format>.
         fps: Target frame rate. None keeps source fps.
         format: Output format — "glb" (default) or "gltf".
         min_cutoff: One-Euro filter min cutoff.
@@ -34,25 +38,30 @@ def run(
     Returns:
         Path to the generated output file.
     """
+    if format not in {"glb", "gltf", "bvh"}:
+        raise ValueError("Format must be glb, gltf, or bvh")
+    if fps is not None and (not np.isfinite(fps) or fps <= 0):
+        raise ValueError("Target fps must be positive")
     if output_path is None:
-        output_path = video_path.with_suffix(f".{format}")
+        output_path = output_file(f"{video_path.stem}.{format}")
 
-    work_dir = video_path.parent
+    work_dir = output_file("intermediate") / video_path.stem
+    work_dir.mkdir(parents=True, exist_ok=True)
 
-    # Stage 1: Extract landmarks
-    print("Stage 1: Extracting landmarks...")
-    npz_path = do_extract(video_path, work_dir / "temp_extract.npz")
+    # Extract landmarks
+    print("Extracting landmarks...")
+    npz_path = do_extract(video_path, work_dir / "landmarks.npz")
 
-    # Stage 2: Smooth
-    print("Stage 2: Smoothing landmarks...")
-    smooth_path = do_smooth(npz_path, work_dir / "temp_smooth.npz", min_cutoff, beta)
+    # Smooth
+    print("Smoothing landmarks...")
+    smooth_path = do_smooth(npz_path, work_dir / "landmarks_smooth.npz", min_cutoff, beta)
 
-    # Stage 3: Solve rotations
-    print("Stage 3: Solving rotations...")
-    rot_path = do_solve(smooth_path, work_dir / "temp_rotations.npz")
+    # Solve rotations
+    print("Solving rotations...")
+    rot_path = do_solve(smooth_path, work_dir / "rotations.npz")
 
-    # Stage 4: Retarget to Mixamo
-    print("Stage 4: Retargeting to Mixamo skeleton...")
+    # Retarget to Mixamo
+    print("Retargeting to Mixamo skeleton...")
     data = dict(np.load(rot_path, allow_pickle=True))
     internal_rotations = {}
     for key in data:
@@ -60,23 +69,26 @@ def run(
             bone_name = key[4:]
             internal_rotations[bone_name] = data[key]
 
-    result = retarget(internal_rotations, num_frames=int(data["num_frames"]))
-    mixamo_rotations = result["rotations"]
+    output_fps = float(data["fps"])
+    num_frames = int(data["num_frames"])
+    if fps is not None and fps != output_fps and num_frames > 1:
+        source_times = np.arange(num_frames) / output_fps
+        target_times = np.arange(int(np.floor(source_times[-1] * fps)) + 1) / fps
+        internal_rotations = {
+            name: Slerp(source_times, Rotation.from_quat(quats))(target_times).as_quat()
+            for name, quats in internal_rotations.items()
+        }
+    if fps is not None:
+        output_fps = float(fps)
 
-    # Stage 5: Export
-    print(f"Stage 5: Exporting as {format.upper()}...")
-    write_gltf(
-        mixamo_rotations,
-        fps=float(data["fps"]),
-        output_path=output_path,
-        glb=(format == "glb"),
-        bone_names=result["bone_names"],
-        hierarchy=result["hierarchy"],
-    )
-
-    # Cleanup temp files
-    for p in [npz_path, smooth_path, rot_path]:
-        p.unlink(missing_ok=True)
+    print(f"Exporting as {format.upper()}...")
+    if format == "bvh":
+        write_bvh(internal_rotations, output_fps, output_path)
+    else:
+        result = retarget(internal_rotations)
+        write_gltf(result["rotations"], fps=output_fps, output_path=output_path,
+                   glb=(format == "glb"), bone_names=result["bone_names"],
+                   hierarchy=result["hierarchy"])
 
     print(f"Done! Output: {output_path}")
     return output_path

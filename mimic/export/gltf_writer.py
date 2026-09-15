@@ -7,13 +7,14 @@ from pathlib import Path
 import numpy as np
 import pygltflib
 
-from mimic.retargeting.retarget import MIXAMO_HIERARCHY
+from mimic.retargeting.retarget import INTERNAL_TO_MIXAMO, MIXAMO_HIERARCHY
+from mimic.retargeting.skeleton import JOINT_OFFSETS
 
 
 def _collect_bone_order(hierarchy: dict) -> list[str]:
     """Collect bones in parent-first order."""
     order = []
-    queue = ["mixamorig:Hips"]
+    queue = [name for name, parent in hierarchy.items() if parent is None]
     while queue:
         bone = queue.pop(0)
         order.append(bone)
@@ -56,6 +57,16 @@ def write_gltf(
         num_frames = v.shape[0]
         break
 
+    if not np.isfinite(fps) or fps <= 0 or num_frames < 1:
+        raise ValueError("Expected positive fps and at least one animation frame")
+    for quats in rotations.values():
+        if np.shape(quats) != (num_frames, 4) or not np.isfinite(quats).all():
+            raise ValueError("Expected finite quaternion tracks with equal frame counts")
+        if np.any(np.linalg.norm(quats, axis=1) < 1e-8):
+            raise ValueError("Zero quaternion is not a rotation")
+    rotations = {name: q / np.linalg.norm(q, axis=1, keepdims=True)
+                 for name, q in rotations.items()}
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     gltf = pygltflib.GLTF2()
     scene = pygltflib.Scene(nodes=[0])
     gltf.scenes.append(scene)
@@ -64,12 +75,18 @@ def write_gltf(
     # Build bone order (parent-first)
     bone_order = _collect_bone_order(hierarchy)
     # Filter to only bones we have rotations for
-    bone_order = [b for b in bone_order if b in rotations]
+    if set(rotations) - set(bone_order):
+        raise ValueError("Animation contains bones outside the hierarchy")
+    # Keep unanimated parents so descendants retain their rest transforms.
+    for bone in bone_order:
+        rotations.setdefault(bone, np.tile([0., 0., 0., 1.], (num_frames, 1)))
+    offsets = {INTERNAL_TO_MIXAMO[name]: value for name, value in JOINT_OFFSETS.items()}
 
     # Create nodes for each bone
     node_map: dict[str, int] = {}
     for i, bone_name in enumerate(bone_order):
-        node = pygltflib.Node(name=bone_name)
+        offset = offsets.get(bone_name, JOINT_OFFSETS.get(bone_name, (0, 0, 0)))
+        node = pygltflib.Node(name=bone_name, translation=list(offset))
         parent = hierarchy.get(bone_name)
         if parent in node_map:
             parent_node = gltf.nodes[node_map[parent]]
@@ -78,6 +95,8 @@ def write_gltf(
             parent_node.children.append(i)
         gltf.nodes.append(node)
         node_map[bone_name] = i
+
+    scene.nodes = [node_map[b] for b in bone_order if hierarchy[b] is None]
 
     # Build animation data
     # Sampler input: timestamps
@@ -99,7 +118,6 @@ def write_gltf(
             buffer=0,
             byteOffset=0,
             byteLength=len(timestamp_bytes),
-            target=pygltflib.ARRAY_BUFFER,
         )
     )
     keyframe_buffer_view = len(gltf.bufferViews)
@@ -108,7 +126,6 @@ def write_gltf(
             buffer=0,
             byteOffset=len(timestamp_bytes),
             byteLength=len(keyframe_bytes),
-            target=pygltflib.ARRAY_BUFFER,
         )
     )
 

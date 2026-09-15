@@ -1,8 +1,10 @@
-"""Phase 1: Extract landmarks from video and save to .npz."""
+"""Extract landmarks from video and save to .npz."""
 
 from __future__ import annotations
 
 from pathlib import Path
+
+from mimic.config import output_file
 
 import numpy as np
 
@@ -21,7 +23,7 @@ def extract(video_path: Path, output_path: Path | None = None) -> Path:
         Path to the saved .npz file.
     """
     if output_path is None:
-        output_path = video_path.with_suffix(".npz")
+        output_path = output_file(video_path.stem + ".npz")
 
     info = get_video_info(video_path)
     print(f"Video: {video_path.name} ({info['width']}x{info['height']}, "
@@ -41,6 +43,8 @@ def extract(video_path: Path, output_path: Path | None = None) -> Path:
     # Trim zero frames (MediaPipe returns all-zeros when no pose detected)
     vis_sum = vis.sum(axis=1)
     valid = vis_sum > 1.0
+    if not valid.any():
+        raise ValueError("No person detected in the video")
     if not valid.all():
         first_valid = int(np.argmax(valid))
         last_valid = len(valid) - 1 - int(np.argmax(valid[::-1]))
@@ -53,6 +57,7 @@ def extract(video_path: Path, output_path: Path | None = None) -> Path:
         first_valid = 0
         last_valid = len(valid) - 1
 
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         output_path,
         world_landmarks=world,

@@ -16,13 +16,20 @@ mimic convert video.mp4 -o output.glb --fps 30
 mimic info
 ```
 
+Generated files default to the project-root `output/` directory. Conversion
+checkpoints are kept in `output/intermediate/<clip>/`; use `-o` to override a
+final output path.
+
 ## Project Structure
 
-- `mimic/` — Core library (extraction, processing, retargeting, export)
-- `interfaces/cli/` — Typer CLI (thin wrapper around core)
-- `interfaces/api/` — Future FastAPI backend (placeholder)
-- `data/` — Models and rigs
-- `tests/` — Unit tests
+- `mimic/` â€” Core library (extraction, processing, retargeting, export)
+- `interfaces/cli/` â€” Typer CLI (thin wrapper around core)
+- `interfaces/api/` â€” Future FastAPI backend (placeholder)
+- `data/` â€” Models and rigs
+- `tests/` â€” Unit tests
+
+See [the module guide](docs/STRUCTURE.md) and
+[animation conventions](docs/ANIMATION_PIPELINE.md).
 
 ## Development
 

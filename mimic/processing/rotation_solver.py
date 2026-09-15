@@ -1,7 +1,7 @@
 """Convert landmark joint positions into bone rotation quaternions.
 
-Uses a proper hierarchy walk with local rotation computation and
-twist-swing decomposition to avoid random twist artifacts.
+Uses measured torso/head frames and parent-local swing rotations for limbs.
+Single segment directions cannot recover anatomical limb twist.
 """
 
 from __future__ import annotations
@@ -87,24 +87,10 @@ def _compute_bone_direction(bone_name: str, lm: np.ndarray) -> np.ndarray:
 
     Returns unit direction FROM parent joint TO child joint.
     """
-    if bone_name == "pelvis":
-        return _dir(_mid(lm[LM_LEFT_HIP], lm[LM_RIGHT_HIP]),
-                     _mid(lm[LM_LEFT_SHOULDER], lm[LM_RIGHT_SHOULDER]))
-    if bone_name == "spine":
-        return _dir(_mid(lm[LM_LEFT_SHOULDER], lm[LM_RIGHT_SHOULDER]),
-                     lm[LM_NOSE])
-    if bone_name == "spine1":
-        return _dir(_mid(lm[LM_LEFT_SHOULDER], lm[LM_RIGHT_SHOULDER]),
-                     _mid(lm[LM_LEFT_EAR], lm[LM_RIGHT_EAR]))
-    if bone_name == "chest":
-        return _dir(lm[LM_NOSE],
-                     _mid(lm[LM_LEFT_EAR], lm[LM_RIGHT_EAR]))
-    if bone_name == "neck":
-        return _dir(_mid(lm[LM_LEFT_EAR], lm[LM_RIGHT_EAR]),
-                     lm[LM_NOSE])
-    if bone_name == "head":
-        return _dir(lm[LM_NOSE],
-                     _mid(lm[LM_LEFT_EYE_INNER], lm[LM_RIGHT_EYE_INNER]))
+    if bone_name in {"pelvis", "spine", "spine1", "chest"}:
+        return _dir(_mid(lm[23], lm[24]), _mid(lm[11], lm[12]))
+    if bone_name in {"neck", "head"}:
+        return _dir(_mid(lm[11], lm[12]), _mid(lm[7], lm[8]))
     if bone_name == "left_shoulder":
         return _dir(_mid(lm[LM_LEFT_SHOULDER], lm[LM_RIGHT_SHOULDER]),
                      lm[LM_LEFT_SHOULDER])
@@ -144,24 +130,45 @@ def _compute_bone_direction(bone_name: str, lm: np.ndarray) -> np.ndarray:
 
 def _swing_rotation(rest_dir: np.ndarray, current_dir: np.ndarray) -> Rotation:
     """Compute the swing-only rotation from rest direction to current direction."""
-    rest = rest_dir / (np.linalg.norm(rest_dir) + 1e-8)
-    curr = current_dir / (np.linalg.norm(current_dir) + 1e-8)
-
-    dot = np.clip(np.dot(rest, curr), -1.0, 1.0)
-
-    if dot > 0.9999:
+    nr, nc = np.linalg.norm(rest_dir), np.linalg.norm(current_dir)
+    if min(nr, nc) < 1e-8:
         return Rotation.identity()
-
-    if dot < -0.9999:
-        perp = np.array([1.0, 0.0, 0.0]) if abs(rest[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
-        axis = np.cross(rest, perp)
-        axis /= np.linalg.norm(axis) + 1e-8
-        return Rotation.from_rotvec(np.pi * axis)
-
+    rest, curr = rest_dir / nr, current_dir / nc
+    dot = np.clip(np.dot(rest, curr), -1.0, 1.0)
     axis = np.cross(rest, curr)
-    axis /= np.linalg.norm(axis) + 1e-8
-    angle = np.arccos(dot)
-    return Rotation.from_rotvec(angle * axis)
+    norm = np.linalg.norm(axis)
+    if norm < 1e-8:
+        if dot > 0:
+            return Rotation.identity()
+        axis = np.cross(rest, np.eye(3)[np.argmin(np.abs(rest))])
+        return Rotation.from_rotvec(np.pi * axis / np.linalg.norm(axis))
+    return Rotation.from_rotvec(np.arctan2(norm, dot) * axis / norm)
+
+
+BONE_LANDMARKS = {
+    **{b: [23, 24, 11, 12] for b in ["pelvis", "spine", "spine1", "chest"]},
+    "neck": [11, 12, 7, 8], "head": [7, 8, 0],
+    "left_shoulder": [11, 12], "right_shoulder": [11, 12],
+    "left_upper_arm": [11, 13], "left_lower_arm": [13, 15],
+    "left_hand": [15, 19], "right_upper_arm": [12, 14],
+    "right_lower_arm": [14, 16], "right_hand": [16, 20],
+    "left_hip": [23, 25], "left_upper_leg": [25, 27],
+    "left_lower_leg": [27, 31], "left_foot": [29, 31],
+    "right_hip": [24, 26], "right_upper_leg": [26, 28],
+    "right_lower_leg": [28, 32], "right_foot": [30, 32],
+}
+
+
+def _body_frame(x, y):
+    """Orthonormal frame from lateral and upward vectors; None if degenerate."""
+    if np.linalg.norm(y) < 1e-8:
+        return None
+    y = y / np.linalg.norm(y)
+    x = x - y * np.dot(x, y)
+    if np.linalg.norm(x) < 1e-8:
+        return None
+    x /= np.linalg.norm(x)
+    return Rotation.from_matrix(np.column_stack((x, y, np.cross(x, y))))
 
 
 def solve_rotations(
@@ -189,54 +196,48 @@ def solve_rotations(
     """
     from mimic.retargeting.skeleton import create_mediapipe_skeleton
 
+    landmarks = np.asarray(landmarks, dtype=float)
+    if landmarks.ndim != 3 or landmarks.shape[1:] != (33, 3) or not len(landmarks):
+        raise ValueError("Expected nonempty (frames, 33, 3) landmarks")
+    if visibility is not None and np.shape(visibility) != landmarks.shape[:2]:
+        raise ValueError("Visibility must have shape (frames, 33)")
     skel = create_mediapipe_skeleton()
-    num_frames = landmarks.shape[0]
+    num_frames = len(landmarks)
+    bone_rotations = {name: np.tile([0., 0., 0., 1.], (num_frames, 1)) for name in BONE_ORDER}
 
-    bone_rotations: dict[str, np.ndarray] = {
-        name: np.zeros((num_frames, 4)) for name in BONE_ORDER
-    }
-    for name in bone_rotations:
-        bone_rotations[name][:, 3] = 1.0
-
-    for frame_idx in range(num_frames):
-        lm = landmarks[frame_idx]
-
-        world_rots: dict[str, Rotation] = {}
-
+    for frame_idx, lm in enumerate(landmarks):
+        world_rots = {}
         for bone_name in BONE_ORDER:
-            direction = _compute_bone_direction(bone_name, lm)
-            if np.allclose(direction, 0):
-                world_rots[bone_name] = Rotation.identity()
-                continue
-
-            bone = skel.bones.get(bone_name)
-            if bone and bone.rest_direction is not None:
-                rest_dir = bone.rest_direction / (
-                    np.linalg.norm(bone.rest_direction) + 1e-8
-                )
-            else:
-                rest_dir = np.array([0.0, 1.0, 0.0])
-
-            parent_name = BONE_HIERARCHY.get(bone_name)
-            parent_world = world_rots.get(parent_name) if parent_name else None
-
-            if parent_world is not None:
-                # Transform both directions into parent's local frame
-                local_rest = parent_world.inv().apply(rest_dir.reshape(1, 3))[0]
-                local_curr = parent_world.inv().apply(direction.reshape(1, 3))[0]
-                # Compute rotation in local frame
-                local_rot = _swing_rotation(local_rest, local_curr)
-            else:
-                # Root bone: compute world rotation directly
-                local_rot = _swing_rotation(rest_dir, direction)
-
-            bone_rotations[bone_name][frame_idx] = local_rot.as_quat()
-
-            # Accumulate world rotation for children
-            if parent_world is not None:
-                world_rots[bone_name] = parent_world * local_rot
-            else:
-                world_rots[bone_name] = local_rot
+            parent = BONE_HIERARCHY[bone_name]
+            parent_world = world_rots[parent] if parent else Rotation.identity()
+            indices = BONE_LANDMARKS[bone_name]
+            valid = np.isfinite(lm[indices]).all()
+            if visibility is not None:
+                valid = valid and bool(np.all(visibility[frame_idx, indices] >= visibility_threshold))
+            local_rot = (Rotation.from_quat(bone_rotations[bone_name][frame_idx - 1])
+                         if frame_idx else Rotation.identity())
+            if valid:
+                direction = _compute_bone_direction(bone_name, lm)
+                measured = None
+                if bone_name in {"pelvis", "spine", "spine1", "chest"}:
+                    lateral = lm[23] - lm[24] if bone_name == "pelvis" else lm[11] - lm[12]
+                    measured = _body_frame(lateral, direction)
+                elif bone_name == "head":
+                    x = lm[7] - lm[8]
+                    forward = lm[0] - _mid(lm[7], lm[8])
+                    measured = _body_frame(x, np.cross(forward, x))
+                if measured is not None:
+                    local_rot = parent_world.inv() * measured
+                elif np.linalg.norm(direction) > 1e-8 and bone_name != "head":
+                    local_rot = _swing_rotation(
+                        skel.bones[bone_name].rest_direction,
+                        parent_world.inv().apply(direction),
+                    )
+            quat = local_rot.as_quat()
+            if frame_idx and np.dot(quat, bone_rotations[bone_name][frame_idx - 1]) < 0:
+                quat = -quat
+            bone_rotations[bone_name][frame_idx] = quat
+            world_rots[bone_name] = parent_world * local_rot
 
     return {
         "rotations": bone_rotations,

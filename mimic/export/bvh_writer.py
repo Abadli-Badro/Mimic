@@ -12,40 +12,23 @@ from mimic.processing.rotation_solver import BONE_HIERARCHY
 CHANNELS = ["Xposition", "Yposition", "Zposition", "Xrotation", "Yrotation", "Zrotation"]
 NUM_CHANNELS = 6
 
-# Joint offsets (approximate, in centimeters) — used for BVH skeleton structure
-JOINT_OFFSETS = {
-    "pelvis": (0, 0, 0),
-    "spine": (0, 15, 0),
-    "chest": (0, 15, 0),
-    "neck": (0, 12, 0),
-    "head": (0, 10, 0),
-    "left_shoulder": (-8, 10, 0),
-    "left_upper_arm": (-12, 0, 0),
-    "left_lower_arm": (-12, 0, 0),
-    "left_hand": (-10, 0, 0),
-    "right_shoulder": (8, 10, 0),
-    "right_upper_arm": (12, 0, 0),
-    "right_lower_arm": (12, 0, 0),
-    "right_hand": (10, 0, 0),
-    "left_upper_leg": (-6, -10, 0),
-    "left_lower_leg": (0, -18, 2),
-    "left_foot": (0, -16, 4),
-    "right_upper_leg": (6, -10, 0),
-    "right_lower_leg": (0, -18, 2),
-    "right_foot": (0, -16, 4),
-}
+# The same rest skeleton as GLB, converted from meters to BVH centimeters.
+from mimic.retargeting.skeleton import JOINT_OFFSETS as REST_OFFSETS
+
+JOINT_OFFSETS = {name: tuple(100 * v for v in offset) for name, offset in REST_OFFSETS.items()}
 
 
 def _get_joint_order() -> list[str]:
-    """Get BFS joint order for BVH hierarchy."""
+    """Channel order must match recursive hierarchy declaration order."""
     order = []
-    queue = ["pelvis"]
-    while queue:
-        joint = queue.pop(0)
+
+    def visit(joint):
         order.append(joint)
         for child, parent in BONE_HIERARCHY.items():
             if parent == joint:
-                queue.append(child)
+                visit(child)
+
+    visit("pelvis")
     return order
 
 
@@ -97,6 +80,12 @@ def write_bvh(
             num_frames = v.shape[0]
             break
 
+    if not np.isfinite(fps) or fps <= 0 or not num_frames:
+        raise ValueError("Expected positive fps and at least one animation frame")
+    for quats in rotations.values():
+        if np.shape(quats) != (num_frames, 4) or not np.isfinite(quats).all():
+            raise ValueError("Expected finite quaternion tracks with equal frame counts")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     joint_order = _get_joint_order()
 
     with open(output_path, "w") as f:

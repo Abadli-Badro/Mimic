@@ -73,25 +73,25 @@ None of these are blockers — they're all solved problems in the broader mocap-
 
 ## 4. Step-by-step plan
 
-**Phase 1 — Extraction**
+**— Extraction**
 Read MP4 with OpenCV, run MediaPipe Pose Landmarker per frame, dump the 33-landmark world-coordinate sequence to a `.npz`/`.json` file. Visualize a few frames with matplotlib as a 3D scatter to sanity-check tracking quality before building anything else.
 
-**Phase 2 — Cleaning**
+**— Cleaning**
 Apply a temporal filter (One-Euro or Savitzky-Golay) per landmark across frames to remove jitter. Plot before/after to confirm it's actually helping and not over-smoothing fast motion.
 
-**Phase 3 — Rotation solving (core engineering)**
+**— Rotation solving (core engineering)**
 Define a simple skeleton hierarchy matching MediaPipe's landmark set (parent/child pairs). For each bone, compute per-frame rotation relative to a rest pose using vector alignment (e.g., via `scipy.spatial.transform.Rotation.align_vectors`). Validate by applying the rotations to a simple stick-figure skeleton and animating it — no rig or FBX yet, just confirm the math is sound.
 
-**Phase 4 — BVH export**
+**— BVH export**
 Write the rotation data out as a BVH file (simple, human-readable, universal mocap format). This is a good checkpoint: BVH import into Blender is standard, letting you visually verify the motion before tackling retargeting complexity.
 
-**Phase 5 — Retargeting to Mixamo skeleton**
+**— Retargeting to Mixamo skeleton**
 Build a name/hierarchy mapping table from your simplified skeleton to Mixamo's bone names, and apply your BVH-derived rotations onto the target skeleton's joint hierarchy in pure Python, accounting for the rest-pose offset (A-pose correction).
 
-**Phase 6 — glTF export**
+**— glTF export**
 Write the retargeted skeleton, its skinning data, and per-frame rotation keyframes to a `.glb` using `pygltflib`. Test the result by loading it in a quick three.js/react-three-fiber viewer (or Blender's glTF importer) to confirm it plays correctly outside your working environment.
 
-**Phase 7 — CLI + polish**
+**— CLI + polish**
 Wrap the above stages behind a `typer`-based CLI (`extract`, `clean`, `retarget`, `export`), with intermediate artifacts saved at each step for debuggability. Add axis-convention fixes and pose-mismatch corrections as you find them through testing.
 
 ---

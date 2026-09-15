@@ -19,7 +19,7 @@ def read_frames(
         target_fps: If provided, subsample to this frame rate.
 
     Returns:
-        A tuple of (frames, source_fps) where frames is a list of BGR images.
+        A tuple of (frames, effective_fps) where frames is a list of BGR images.
     """
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
@@ -44,7 +44,7 @@ def read_frames(
         frame_idx += 1
 
     cap.release()
-    return frames, source_fps
+    return frames, source_fps / step
 
 
 def get_video_info(video_path: Path) -> dict:

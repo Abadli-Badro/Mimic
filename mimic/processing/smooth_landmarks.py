@@ -1,12 +1,14 @@
-"""Phase 2: Smooth landmark trajectories from .npz file."""
+"""Smooth landmark trajectories from .npz file."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
+from mimic.config import output_file
+
 import numpy as np
 
-from mimic.processing.smoothing import smooth_landmarks_array
+from mimic.processing.smoothing import fill_landmark_gaps, smooth_landmarks_array
 
 
 def smooth(
@@ -27,7 +29,7 @@ def smooth(
         Path to the smoothed .npz file.
     """
     if output_path is None:
-        output_path = npz_path.with_name(npz_path.stem + "_smooth.npz")
+        output_path = output_file(npz_path.stem + "_smooth.npz")
 
     data = dict(np.load(npz_path, allow_pickle=True))
     world = data["world_landmarks"]
@@ -37,11 +39,12 @@ def smooth(
     print(f"  min_cutoff={min_cutoff}, beta={beta}, fps={fps}")
 
     smoothed_world = smooth_landmarks_array(
-        world, fps=fps, min_cutoff=min_cutoff, beta=beta,
+        fill_landmark_gaps(world, data["visibility"]), fps=fps, min_cutoff=min_cutoff, beta=beta,
     )
 
     # 2D landmarks stay as-is (they're already in image space, smoothing would
     # misalign with the video if we did it here)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         output_path,
         world_landmarks=smoothed_world,
@@ -49,6 +52,7 @@ def smooth(
         visibility=data["visibility"],
         fps=fps,
         landmark_names=data["landmark_names"],
+        first_frame=data.get("first_frame", 0),
     )
     print(f"Saved smoothed landmarks to: {output_path}")
     return output_path

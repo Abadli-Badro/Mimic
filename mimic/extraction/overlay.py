@@ -4,19 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from mimic.config import output_file
+
 import cv2
 import numpy as np
 
-POSE_CONNECTIONS = [
-    (11, 12), (11, 13), (13, 15), (12, 14), (14, 16),
-    (11, 23), (12, 24), (23, 24),
-    (23, 25), (25, 27), (27, 29), (27, 30),
-    (24, 26), (26, 28), (28, 30), (28, 31),
-    (0, 1), (1, 2), (2, 3),
-    (0, 4), (4, 5), (5, 6),
-    (0, 7), (0, 8),
-    (9, 10),
-]
+from mimic.extraction.pose_extractor import POSE_CONNECTIONS
 
 COLORS = {
     "line": (0, 255, 0),
@@ -89,7 +82,7 @@ def generate_overlay_video(
         Path to the generated overlay video.
     """
     if output_path is None:
-        output_path = video_path.with_name(video_path.stem + "_overlay.mp4")
+        output_path = output_file(video_path.stem + "_overlay.mp4")
 
     data = dict(np.load(npz_path, allow_pickle=True))
     landmarks_2d = data["landmarks_2d"]
@@ -104,17 +97,20 @@ def generate_overlay_video(
     source_fps = fps or cap.get(cv2.CAP_PROP_FPS)
 
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     writer = cv2.VideoWriter(str(output_path), fourcc, source_fps, (width, height))
 
+    first_frame = int(data.get("first_frame", 0))
     frame_idx = 0
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
-        if frame_idx < landmarks_2d.shape[0]:
+        pose_idx = frame_idx - first_frame
+        if 0 <= pose_idx < landmarks_2d.shape[0]:
             annotated = draw_skeleton(
-                frame, landmarks_2d[frame_idx], visibility[frame_idx],
+                frame, landmarks_2d[pose_idx], visibility[pose_idx],
                 width, height, threshold,
             )
         else:
@@ -132,6 +128,6 @@ if __name__ == "__main__":
     import sys
 
     video = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("data/input/Sneaky walk reference.mp4")
-    npz = video.with_suffix(".npz")
+    npz = output_file(video.stem + ".npz")
     out = generate_overlay_video(video, npz)
     print(f"Overlay video saved to: {out}")

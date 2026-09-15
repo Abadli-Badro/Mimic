@@ -1,4 +1,4 @@
-"""End-to-end test for phase 1 extraction pipeline."""
+"""Tests for video-to-landmark file extraction."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from mimic.extraction.phase1 import extract
+from mimic.extraction.video_to_landmarks import extract
 from mimic.extraction.video_reader import get_video_info, read_frames
 
 
@@ -29,9 +29,9 @@ def _create_test_video(path: Path, num_frames: int = 30, fps: float = 10.0) -> P
     return path
 
 
-def test_video_reader():
+def test_video_reader(tmp_path: Path) -> None:
     """Test basic video reading."""
-    video_path = Path("examples/sample_videos/test_synthetic.mp4")
+    video_path = tmp_path / "test_synthetic.mp4"
     _create_test_video(video_path)
 
     info = get_video_info(video_path)
@@ -44,15 +44,20 @@ def test_video_reader():
     assert len(frames) == 30
     assert fps > 0
 
-    video_path.unlink(missing_ok=True)
 
-
-def test_full_extraction():
+def test_full_extraction(tmp_path: Path, monkeypatch) -> None:
     """Test full extraction pipeline (video -> .npz)."""
-    video_path = Path("examples/sample_videos/test_synthetic.mp4")
+    video_path = tmp_path / "test_synthetic.mp4"
     _create_test_video(video_path)
 
-    output_path = Path("examples/sample_videos/test_synthetic.npz")
+    output_path = tmp_path / "test_synthetic.npz"
+    from mimic.extraction import video_to_landmarks
+    monkeypatch.setattr(video_to_landmarks, "extract_landmarks", lambda frames, fps: {
+        "world_landmarks": np.ones((30, 33, 3)),
+        "visibility": np.ones((30, 33)),
+        "landmarks_2d": np.ones((30, 33, 2)),
+        "landmark_names": [str(i) for i in range(33)],
+    })
     result = extract(video_path, output_path)
 
     assert result.exists()
@@ -61,13 +66,3 @@ def test_full_extraction():
     assert "visibility" in data
     assert data["world_landmarks"].shape == (30, 33, 3)
     assert data["visibility"].shape == (30, 33)
-
-    result.unlink(missing_ok=True)
-    video_path.unlink(missing_ok=True)
-
-
-if __name__ == "__main__":
-    test_video_reader()
-    print("test_video_reader passed")
-    test_full_extraction()
-    print("test_full_extraction passed")
