@@ -6,17 +6,23 @@ library; `mimic.pipeline.run()` orchestrates conversion from video to animation.
 ```text
 mimic/
     pipeline.py                 Full conversion workflow
-    config.py                   Model and data paths
+    config.py                   Paths, resource limits, and tracking defaults
+    errors.py                   Stage-aware errors and stable error codes
+    validation.py               Landmark, hierarchy, and rotation contracts
+    artifacts.py                Safe NPZ loading, atomic writes, and run status
     extraction/
         video_reader.py         Video decoding and frame sampling
         pose_extractor.py       MediaPipe landmark detection
+        pose_selection.py       Duplicate suppression and primary pose selection
+        quality.py              Human-pose usability checks
         video_to_landmarks.py   Extract and save a landmark NPZ file
         overlay.py              Draw landmarks over the original video
         landmark_plots.py       Plot extracted 3D landmarks
     processing/
         smoothing.py            Temporal filters and gap interpolation
         smooth_landmarks.py     Load, smooth, and save a landmark NPZ file
-        rotation_solver.py      Compute local bone rotations from landmarks
+        rotation_solver.py      Compute/interpolate local bone rotations
+        tracking.py             Per-bone timers and common clip cutoff
         landmarks_to_rotations.py  Load landmarks and save rotation tracks
         trajectory_plots.py     Compare raw and filtered trajectories
         skeleton_preview.py     Landmark previews and forward kinematics
@@ -28,6 +34,7 @@ mimic/
         bvh_writer.py           BVH hierarchy and animation serialization
         gltf_writer.py          Skeleton GLB/glTF serialization
         merge_animation.py      Transfer animation onto a skinned model
+        gltf_validation.py      Container, graph, skin, and animation checks
         fbx_exporter.py         Unimplemented optional FBX exporter
 interfaces/
     cli/main.py                 Typer commands
@@ -40,6 +47,10 @@ tests/
     test_export.py              Export checks
     test_pipeline.py            Pipeline checks
     test_animation_regressions.py  Motion and export regression checks
+    test_error_handling.py      Invalid inputs and failure-path checks
+    test_pose_selection.py      Duplicate and multi-person detection checks
+    test_tracking_timers.py     Gap interpolation and timeout checks
+    test_run_command.py         Full-pipeline command orchestration
 data/
     input/                      Source clips and existing reference artifacts
     models/                     MediaPipe model and rigged character assets
@@ -49,7 +60,7 @@ output/                         Generated animations and diagnostic artifacts
 docs/
     STRUCTURE.md                This module guide
     ANIMATION_PIPELINE.md        Coordinate conventions and validation
-    PROJECT.md                  Original feasibility and design notes
+    PROJECT.md                  Current scope and supported behavior
 ```
 
 Each package also contains an `__init__.py` file.
@@ -67,7 +78,7 @@ Each package also contains an `__init__.py` file.
 ## Entry points
 
 The installed `mimic` command points to `interfaces.cli.main:app`. It exposes
-`extract`, `smooth`, `convert`, `visualize`, `merge`, and `info`.
+`run`, `extract`, `smooth`, `convert`, `visualize`, `merge`, and `info`.
 
 Library workflows can also be called directly:
 

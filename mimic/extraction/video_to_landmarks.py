@@ -47,7 +47,7 @@ def extract(video_path: Path, output_path: Path | None = None) -> Path:
     landmarks_2d = result["landmarks_2d"]
 
     landmarks({**result, 'fps': source_fps})
-    first_valid, last_valid = validate_pose_quality(world, vis, source_fps)
+    first_valid, last_valid = validate_pose_quality(world, vis, source_fps, enforce_continuity=False)
     if first_valid or last_valid != len(world) - 1:
         print(f"Keeping source frames {first_valid}-{last_valid} (trimming undetected edges)")
     world = world[first_valid:last_valid + 1]

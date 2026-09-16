@@ -32,13 +32,19 @@ def solve(npz_path: Path, output_path: Path | None = None) -> Path:
     output_path = check_output(output_path, ".npz", [npz_path])
     data = load_npz(npz_path)
     landmarks(data)
-    validate_pose_quality(data["world_landmarks"], data["visibility"], float(data["fps"]))
+
     world = data["world_landmarks"]
     visibility = data["visibility"]
 
     print(f"Solving rotations: {world.shape[0]} frames, {world.shape[1]} landmarks")
 
-    result = solve_rotations(world, visibility)
+    from mimic.config import MAX_MISSING_BONE_FRAMES
+    timer = int(data.get('max_missing_frames', MAX_MISSING_BONE_FRAMES))
+    overrides = dict(zip(data.get('bone_timer_names', []), data.get('bone_timer_limits', [])))
+    result = solve_rotations(world, visibility, max_missing_frames=timer, bone_limits=overrides)
+    stopped = list(result['stopped_bones']) or list(data.get('stopped_bones', []))
+    if stopped:
+        print(f"Clip ended after {result['num_frames']} frames; expired bones: {', '.join(stopped)}")
 
     # Save rotations as individual arrays
     save_dict = {
@@ -46,6 +52,9 @@ def solve(npz_path: Path, output_path: Path | None = None) -> Path:
         "fps": data["fps"],
         "first_frame": data.get("first_frame", 0),
         "bone_names": np.array(result["bone_names"]),
+        "input_frames": data.get('input_frames', result['input_frames']),
+        "stopped_bones": np.array(stopped, dtype=str),
+        "max_missing_frames": timer,
     }
     for bone_name, quats in result["rotations"].items():
         save_dict[f"rot_{bone_name}"] = quats

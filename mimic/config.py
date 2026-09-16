@@ -45,3 +45,8 @@ class PoseQuality:
 
 VIDEO_LIMITS = VideoLimits()
 POSE_QUALITY = PoseQuality()
+
+# Number of consecutive unobserved source frames allowed before ending a clip.
+MAX_MISSING_BONE_FRAMES = 20
+# Optional per-bone overrides, using names from rotation_solver.BONE_ORDER.
+BONE_MISSING_FRAME_LIMITS = {}

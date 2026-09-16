@@ -4,7 +4,7 @@ from mimic.config import POSE_QUALITY
 from mimic.errors import MimicError
 
 
-def validate_pose_quality(world, visibility, fps, policy=None):
+def validate_pose_quality(world, visibility, fps, policy=None, enforce_continuity=True):
     policy = policy or POSE_QUALITY
     visible = visibility >= policy.visibility_threshold
     core = [11,12,23,24,25,26,27,28]
@@ -18,7 +18,8 @@ def validate_pose_quality(world, visibility, fps, policy=None):
     hips = np.linalg.norm(world[:,23]-world[:,24],axis=1)
     plausible = (torso > .08) & (torso < 1.5) & (shoulders > .03) & (hips > .02)
     good = reliable & plausible
-    if good[first:last+1].mean() < policy.minimum_good_fraction:
+    fraction = good[first:last+1].mean() if enforce_continuity else good.sum() / reliable.sum()
+    if fraction < policy.minimum_good_fraction:
         raise MimicError('poor_pose_quality', 'Too few reliable body poses or collapsed body geometry. Improve lighting, framing, or use a clearer clip.')
     if good.sum() < policy.minimum_good_frames:
         raise MimicError('insufficient_motion', f'Need at least {policy.minimum_good_frames} reliable pose frames. Use a longer visible segment.')
@@ -26,6 +27,6 @@ def validate_pose_quality(world, visibility, fps, policy=None):
     for ok in good[first:last+1]:
         gap = 0 if ok else gap + 1
         longest = max(longest, gap)
-    if retained.mean() < policy.minimum_good_fraction or longest / fps > policy.maximum_gap_seconds:
+    if enforce_continuity and (retained.mean() < policy.minimum_good_fraction or longest / fps > policy.maximum_gap_seconds):
         raise MimicError('tracking_lost', 'Pose tracking is unreliable or missing for too long inside the clip. Trim the gap or use clearer footage.')
     return int(first), int(last)

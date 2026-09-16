@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mimic.config import output_file
+from mimic.config import output_file, MAX_MISSING_BONE_FRAMES
 from typing import Optional
 
 import typer
+import sys
+import traceback
 from functools import wraps
 from mimic.errors import MimicError
 
@@ -19,7 +21,12 @@ def cli_errors(fn):
             return fn(*args, **kwargs)
         except (MimicError, OSError, ValueError) as exc:
             typer.echo(f"Error: {exc}", err=True)
-            raise typer.Exit(code=1) from exc
+            raise typer.Exit(code=1) from None
+        except Exception as exc:
+            # Keep unexpected failures visible even when Typer/Rich's hook fails.
+            typer.echo("Unexpected error (plain traceback follows):", err=True)
+            traceback.print_exception(type(exc), exc, exc.__traceback__, file=sys.stderr)
+            raise typer.Exit(code=1) from None
     return wrapped
 
 
@@ -29,11 +36,44 @@ app = typer.Typer(
           "Use merge to apply a GLB animation to a rigged character. "
           "Generated files default to the project-root output/ directory."),
     no_args_is_help=True,
+    pretty_exceptions_enable=False,
     context_settings={"help_option_names": ["-h", "--help"]},
     epilog=("Quick start: mimic convert video.mp4 | "
             "Character: mimic merge data/models/model.glb output/video.glb | "
             "Command help: mimic COMMAND --help"),
 )
+
+
+@app.command("run")
+@cli_errors
+def run_pipeline(
+    video: Path = typer.Argument(..., help="Input video path."),
+    format: str = typer.Option("glb", "-f", "--format", help="Final format: glb or bvh."),
+    output: Optional[Path] = typer.Option(None, "-o", "--output", help="Final animation path; defaults under output/."),
+    overlay: bool = typer.Option(False, "--overlay", help="Also save a landmark overlay of the original video beside the animation."),
+    max_missing_frames: int = typer.Option(MAX_MISSING_BONE_FRAMES, "--max-missing-frames", min=0,
+        help="Maximum unseen source frames per bone before ending the animation."),
+    fps: Optional[int] = typer.Option(None, "--fps", min=1, max=240, help="Resample animation; overlay keeps source FPS."),
+    model: Optional[Path] = typer.Option(None, "--model", help="GLB character model; default: data/models/model.glb. Not used for BVH."),
+) -> None:
+    """Run the entire pipeline and export an animated character GLB or skeleton BVH.
+
+    Example: mimic run "data/input/Dance Reference.mp4" --format glb --overlay --max-missing-frames 20
+
+    Extracts once, smooths, solves rotations, exports, and merges the model for GLB.
+    Intermediate files and run status are kept in output/intermediate/<video>/.
+    """
+    from mimic.config import MODELS_DIR
+    from mimic.pipeline import run
+
+    if format not in {'glb', 'bvh'}:
+        raise typer.BadParameter('Choose glb or bvh.', param_hint='--format')
+    if format == 'bvh' and model is not None:
+        raise typer.BadParameter('--model applies only to GLB output.', param_hint='--model')
+    target_model = (model or MODELS_DIR / 'model.glb') if format == 'glb' else None
+    result = run(video_path=video, output_path=output, fps=fps, format=format,
+                 max_missing_frames=max_missing_frames, model_path=target_model, overlay=overlay)
+    typer.echo(f"Animation saved to: {result}")
 
 
 @app.command()
@@ -94,6 +134,10 @@ def convert(
     video: Path = typer.Argument(..., help="Path to input MP4 video file."),
     output: Optional[Path] = typer.Option(None, "-o", "--output", help="Output path (default: output/<video>.<format>). Use --format to select the format."),
     fps: Optional[int] = typer.Option(None, "--fps", help="Resample to this frame rate; omitted keeps the source rate."),
+    max_missing_frames: int = typer.Option(
+        MAX_MISSING_BONE_FRAMES, "--max-missing-frames", min=0,
+        help="Maximum consecutive unseen source frames per bone; first timeout ends the clip.",
+    ),
     format: str = typer.Option("glb", "-f", "--format", help="Output format: glb, gltf, or bvh."),
 ) -> None:
     """Convert a video into a skeleton animation (GLB, glTF, or BVH).
@@ -107,7 +151,7 @@ def convert(
     """
     from mimic.pipeline import run
 
-    result = run(video_path=video, output_path=output, fps=fps, format=format)
+    result = run(video_path=video, output_path=output, fps=fps, format=format, max_missing_frames=max_missing_frames)
     typer.echo(f"Output written to: {result}")
 
 

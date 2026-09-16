@@ -156,17 +156,21 @@ def test_decoded_memory_limit(tmp_path,monkeypatch):
 def test_multiple_people_rejected_instead_of_selecting_first(tmp_path,monkeypatch):
     from mimic.extraction import pose_extractor as module
     model=tmp_path/'model.task';model.write_bytes(b'fake')
+    def person(x):
+        points=[SimpleNamespace(x=x,y=.4,z=0.,visibility=1.,presence=1.) for _ in range(33)]
+        points[23].y=points[24].y=.7
+        return points
     class Detector:
         def __enter__(self):return self
         def __exit__(self,*args):pass
         def detect_for_video(self,*args):
-            return SimpleNamespace(pose_world_landmarks=[[],[]],pose_landmarks=[[],[]])
+            return SimpleNamespace(pose_world_landmarks=[person(.2),person(.7)],pose_landmarks=[person(.2),person(.7)])
     def create(options):
         assert options.num_poses==2
         return Detector()
     monkeypatch.setattr(module.vision.PoseLandmarker,'create_from_options',create)
     with pytest.raises(MimicError,match='multiple_people'):
-        module.extract_landmarks([np.zeros((32,32,3),dtype=np.uint8)],model,30.)
+        module.extract_landmarks([np.zeros((32,32,3),dtype=np.uint8)]*10,model,30.)
 
 
 def test_gltf_cycle_and_multiple_parents():
@@ -216,3 +220,17 @@ def test_failed_run_reports_failure_without_replacing_export(tmp_path,monkeypatc
     report=json.loads((tmp_path/'intermediate/video/status.json').read_text())
     assert report['status']=='failed' and report['code']=='no_human_pose'
     assert output.read_bytes()==b'old result'
+
+
+def test_cli_unexpected_failure_prints_plain_traceback(tmp_path, monkeypatch):
+    from interfaces.cli.main import app
+    from mimic.extraction import video_to_landmarks
+    def fail(*args, **kwargs):
+        raise AttributeError('detector runtime failure')
+    monkeypatch.setattr(video_to_landmarks, 'extract', fail)
+    result = CliRunner().invoke(app, ['extract', str(tmp_path / 'video.mp4')])
+    assert result.exit_code == 1
+    assert 'Unexpected error (plain traceback follows)' in result.output
+    assert 'AttributeError: detector runtime failure' in result.output
+    assert 'Error in sys.excepthook' not in result.output
+    assert app.pretty_exceptions_enable is False

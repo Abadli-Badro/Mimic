@@ -13,6 +13,7 @@ from mediapipe.tasks.python import vision
 from mimic.config import MEDIAPIPE_MODEL_PATH
 from mimic.errors import MimicError
 from mimic.validation import number
+from mimic.extraction.pose_selection import PoseSelector
 
 # MediaPipe Pose Landmarker 33 landmark names (index order)
 LANDMARK_NAMES = [
@@ -107,6 +108,7 @@ def extract_landmarks(
         num_poses=2,
     )
 
+    selector = PoseSelector(fps or 30.0)
     all_world = []
     all_2d = []
     all_visibility = []
@@ -118,20 +120,18 @@ def extract_landmarks(
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
             result = landmarker.detect_for_video(mp_image, timestamp_ms)
 
-            if len(result.pose_world_landmarks) > 1 or len(result.pose_landmarks) > 1:
-                raise MimicError('multiple_people',
-                                 f'Multiple people detected at frame {i} ({timestamp_ms / 1000:.2f}s). '
-                                 'Use a clip showing only one person.')
-            if result.pose_world_landmarks:
-                lm = result.pose_world_landmarks[0]
+            selected = selector.select(result.pose_landmarks, i, timestamp_ms,
+                                       aspect_ratio=frame.shape[1] / frame.shape[0])
+            if selected is not None and selected < len(result.pose_world_landmarks):
+                lm = result.pose_world_landmarks[selected]
                 coords = np.array([[p.x, -p.y, -p.z] for p in lm])
                 vis = np.array([p.visibility for p in lm])
             else:
                 coords = np.zeros((33, 3))
                 vis = np.zeros(33)
 
-            if result.pose_landmarks:
-                lm2d = result.pose_landmarks[0]
+            if selected is not None and selected < len(result.pose_world_landmarks):
+                lm2d = result.pose_landmarks[selected]
                 coords_2d = np.array([[p.x, p.y] for p in lm2d])
             else:
                 coords_2d = np.zeros((33, 2))
