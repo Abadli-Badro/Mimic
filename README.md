@@ -304,6 +304,10 @@ FBX export and the web/API interface are not implemented.
 
 ## Development and documentation
 
+[GitHub Actions CI](.github/workflows/ci.yml) checks CLI startup and runs the
+test suite on Ubuntu and Windows with Python 3.11 for every push and pull
+request. You can also start it manually from the repository's **Actions** tab.
+
 ```cmd
 .venv\Scripts\python.exe -m pytest -q
 ```
