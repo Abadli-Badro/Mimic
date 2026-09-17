@@ -37,6 +37,12 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libegl1
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
