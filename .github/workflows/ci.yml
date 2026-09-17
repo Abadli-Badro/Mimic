@@ -41,12 +41,18 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends libegl1
+          sudo apt-get install --yes --no-install-recommends libegl1 libgles2
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]" opencv-python
+
+      - name: Check MediaPipe native runtime
+        run: >-
+          python -c "import mediapipe as mp; import numpy as np;
+          image = mp.Image(image_format=mp.ImageFormat.SRGB, data=np.zeros((32, 32, 3), dtype=np.uint8));
+          print('MediaPipe native image runtime loaded successfully')"
 
       - name: Check CLI entry point
         run: |
