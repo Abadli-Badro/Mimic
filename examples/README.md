@@ -17,8 +17,8 @@ through the full source footage. Both exports use a 20-frame missing-bone limit.
 ## Regenerate comparisons
 
 First run the two example pipeline commands in the root README. Keep their
-`output/intermediate/<clip>/rotations.npz` files: the renderer reads the source
-frame offset, frame count, and frame rate from those files.
+`animations/<clip>_status.json` reports: the renderer reads the source
+frame offset, frame count, and frame rate from those reports.
 
 ```cmd
 .venv\Scripts\python.exe examples/render_comparisons.py

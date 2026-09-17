@@ -184,17 +184,15 @@ Defaults for the examples above:
 An explicit `-o` overrides the animation location; the overlay follows that
 location and filename stem with `_overlay.mp4` appended.
 
-Checkpoints are retained in `output/intermediate/<video stem>/`:
-
-- `landmarks.npz`: raw detections and the source-frame offset.
-- `landmarks_smooth.npz`: filtered landmarks, possibly shortened by a timer.
-- `rotations.npz`: bone rotations, frame counts, and timeout metadata.
-- `skeleton.glb`: intermediate skeleton when merging a character in `run`.
-- `status.json`: run state, failing stage/error or completed output paths.
+Each run uses a unique temporary directory under `output/intermediate/`.
+Raw landmarks, smoothed landmarks, rotations, and the merge skeleton are deleted
+when the run exits, including on failure. Final animations and overlays remain.
+A `<animation stem>_status.json` report beside the animation retains completion
+or failure details, frame counts, timing, and expired bones.
 
 The overlay shows the **full source video and raw detections**. It may continue
-after a tracking timeout ends the exported animation. Runs with the same video
-stem share the checkpoint directory; use distinct stems to keep runs separate.
+after a tracking timeout ends the exported animation. Concurrent callers must
+choose distinct final output paths; intermediate directories are isolated.
 
 </details>
 
@@ -237,10 +235,11 @@ win over the CLI default. Timers count source frames before `--fps` resampling.
 
 `extract --visualize` saves plots in `output/previews/<video>/`; it does not
 create an overlay MP4. `visualize` reads `output/<video>.npz` from `extract` by
-default. After `run` or `convert`, point it at the checkpoint explicitly:
+default. To create an overlay later, extract landmarks again:
 
 ```cmd
-mimic visualize "data/input/Dance Reference.mp4" --npz "output/intermediate/Dance Reference/landmarks.npz"
+mimic extract "data/input/Dance Reference.mp4"
+mimic visualize "data/input/Dance Reference.mp4"
 ```
 
 `convert` does not merge a character; use `run` for a complete GLB.
@@ -280,7 +279,7 @@ Expected failures print `Error: <stage>: [code] <message>` where stage/code are
 available, and exit nonzero. Unexpected failures print a plain traceback.
 Files are published atomically, so a failed replacement preserves the previous
 file. A later failure can leave completed outputs from earlier stages; check
-`status.json` rather than assuming an existing file means the latest run succeeded.
+`<animation stem>_status.json` rather than assuming an existing file means the latest run succeeded.
 
 Capture logs in **Command Prompt** (create `output/` first if it does not exist):
 
@@ -300,9 +299,20 @@ If `mimic` resolves to a different Python installation, use the project interpre
 
 Motion is in place: root travel and foot locking are not reconstructed. Fingers
 stay in the character's rest pose; limb twist and spine motion are approximations.
-FBX export and the web/API interface are not implemented.
+FBX export and the web frontend are not implemented. A local conversion API is available.
 
 ## Development and documentation
+
+### Local API
+
+```cmd
+python -m pip install -e ".[api]"
+python -m uvicorn interfaces.api.main:app --host 127.0.0.1 --port 8000
+```
+
+The API supports video uploads, background conversion, progress polling,
+animation/overlay downloads, and deletion of finished jobs.
+See [API endpoints and examples](docs/API.md), or open `http://127.0.0.1:8000/docs`.
 
 [GitHub Actions CI](.github/workflows/ci.yml) checks CLI startup and runs the
 test suite on Ubuntu and Windows with Python 3.11 for every push and pull

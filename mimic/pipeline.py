@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from mimic.config import output_file, MAX_MISSING_BONE_FRAMES
 from mimic.errors import stage
@@ -64,10 +65,13 @@ def run(
     number(beta, 'beta', inclusive=True)
     if fps is not None:
         number(fps, 'fps', maximum=240)
-    work_dir = output_file("intermediate") / video_path.stem
-    work_dir.mkdir(parents=True, exist_ok=True)
+    work_root = output_file("intermediate")
+    work_root.mkdir(parents=True, exist_ok=True)
 
-    with run_report(work_dir / "status.json") as report:
+    with TemporaryDirectory(prefix="run-", dir=work_root) as temporary, run_report(
+        output_path.with_name(output_path.stem + '_status.json')
+    ) as report:
+        work_dir = Path(temporary)
         # Extract landmarks
         print("Extracting landmarks...")
         npz_path = do_extract(video_path, work_dir / "landmarks.npz")
@@ -97,6 +101,9 @@ def run(
         if 'fps' not in data or 'num_frames' not in data:
             raise ValueError('Rotation file must contain fps and num_frames.')
         report['exported_frames'] = int(data['num_frames'])
+        report['source_frames'] = int(data['num_frames'])
+        report['first_frame'] = int(data.get('first_frame', 0))
+        report['source_fps'] = float(data['fps'])
         report['stopped_bones'] = list(data.get('stopped_bones', []))
         output_fps = number(data['fps'], 'fps', maximum=240)
         num_frames = int(data["num_frames"])
@@ -109,6 +116,8 @@ def run(
             }
         if fps is not None:
             output_fps = float(fps)
+        report['fps'] = output_fps
+        report['exported_frames'] = len(next(iter(internal_rotations.values())))
 
         report["stage"] = "export"
         print(f"Exporting as {format.upper()}...")

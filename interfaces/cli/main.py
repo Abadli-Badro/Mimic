@@ -61,7 +61,7 @@ def run_pipeline(
     Example: mimic run "data/input/Dance Reference.mp4" --format glb --overlay --max-missing-frames 20
 
     Extracts once, smooths, solves rotations, exports, and merges the model for GLB.
-    Intermediate files and run status are kept in output/intermediate/<video>/.
+    Temporary intermediate files are deleted on exit. A status JSON remains beside the export.
     """
     from mimic.config import MODELS_DIR
     from mimic.pipeline import run
@@ -146,7 +146,7 @@ def convert(
 
     mimic convert video.mp4 --format bvh
 
-    Checkpoints are saved in output/intermediate/<video>/.
+    Intermediate files are isolated per run and deleted on exit.
     GLB output contains a skeleton; use merge to add a rigged character.
     """
     from mimic.pipeline import run
@@ -169,8 +169,8 @@ def visualize(
 
     Example: mimic visualize video.mp4
 
-    Run extract first, or pass --npz output/intermediate/video/landmarks.npz
-    to use landmarks from convert.
+    Run extract first, or pass --npz with a saved landmark file.
+    For an overlay during conversion, use mimic run --overlay.
     """
     from mimic.extraction.overlay import generate_overlay_video
 

@@ -39,18 +39,15 @@ Historical previews under `output/fixed/`, `output/Dance_corrected/`, or
 
 ## Artifacts and run state
 
-`pipeline.run()` writes checkpoints to `output/intermediate/<video stem>/`.
-`landmarks.npz` contains the trimmed raw detections; `landmarks_smooth.npz`
-contains the timer-limited, filtered sequence. `rotations.npz` contains `rot_<bone>`
-quaternion arrays and metadata including `fps`, `first_frame`, `num_frames`,
-`input_frames`, `bone_names`, and `stopped_bones`.
+`pipeline.run()` creates a unique temporary directory under `output/intermediate/`.
+Extraction, smoothing, rotations, and the merge skeleton live there only during
+processing. The directory is removed on success, exception, or normal interruption.
+Abrupt process termination or power loss may leave temporary files behind.
 
-For character GLB output, `skeleton.glb` is retained as the input to the merge.
-`status.json` starts as `running`, then becomes `complete`, `failed`, or
-`cancelled`. Failure records include the active stage and error. A successful
-bone timeout is a shortened clip; it does not mark the run as failed.
-The `exported_frames` status field currently records the solved frame count
-before optional FPS resampling; final file key counts can differ.
+The persistent `<animation stem>_status.json` beside the export records completion
+or failure, expired bones, `first_frame`, `source_frames`, `source_fps`, output
+`fps`, and `exported_frames` after resampling. A bone timeout produces a successful
+shortened clip. Concurrent callers must use distinct final output paths.
 
 NPZ loading disables pickle and limits expanded data to 512 MiB. Exporters
 validate tracks and structures before publishing through atomic file replacement.

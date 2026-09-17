@@ -38,7 +38,7 @@ mimic/
         fbx_exporter.py         Unimplemented optional FBX exporter
 interfaces/
     cli/main.py                 Typer commands
-    api/                        Reserved API package
+    api/                        FastAPI endpoints and process-based conversion jobs
 tests/
     test_video_to_landmarks.py  Video-to-NPZ workflow checks
     test_extraction.py          Video reader, detector, and preview checks
@@ -55,7 +55,7 @@ data/
     input/                      Source clips and existing reference artifacts
     models/                     MediaPipe model and rigged character assets
 output/                         Generated animations and diagnostic artifacts
-    intermediate/               Retained extraction, smoothing, and rotation files
+    intermediate/               Temporary per-run files; cleaned on exit
     previews/                   Landmark plots
 docs/
     STRUCTURE.md                This module guide

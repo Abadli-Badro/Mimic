@@ -55,8 +55,13 @@ def run_report(path):
     """Record current-run status so retained checkpoints cannot imply success."""
     import json
     from datetime import datetime, timezone
-    report = {'status': 'running', 'stage': 'extraction',
-              'started_at': datetime.now(timezone.utc).isoformat()}
+    class Report(dict):
+        def __setitem__(self, key, value):
+            super().__setitem__(key, value)
+            if key == 'stage':
+                publish()
+    report = Report(status='running', stage='extraction',
+                    started_at=datetime.now(timezone.utc).isoformat())
     def publish():
         with atomic_output(path) as temporary:
             temporary.write_text(json.dumps(report, indent=2), encoding='utf-8')

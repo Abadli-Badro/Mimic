@@ -49,9 +49,9 @@ files use atomic replacement; run status records completion or the failed stage.
 - Motion is in place; root translation and foot-contact cleanup are future work.
 - Finger articulation and reliable anatomical limb twist are not reconstructed.
 - Multiple-person motion capture and identity selection are not supported.
-- FBX export remains a stub; the API package is a placeholder.
-- Repeated runs with the same video stem share intermediate paths. Concurrent
-  jobs and isolated job storage require additional orchestration.
+- FBX export remains a stub; the local API is documented in [API.md](API.md).
+- Intermediate paths are isolated per run and cleaned on exit. Concurrent callers
+  must still choose distinct final output paths.
 
 This document describes the implementation, rather than the original feasibility
 plan. See [pipeline details](ANIMATION_PIPELINE.md) and the

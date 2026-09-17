@@ -217,9 +217,10 @@ def test_failed_run_reports_failure_without_replacing_export(tmp_path,monkeypatc
     monkeypatch.setattr(pipeline,'do_extract',fail)
     output=tmp_path/'existing.glb';output.write_bytes(b'old result')
     with pytest.raises(MimicError):pipeline.run(tmp_path/'video.mp4',output)
-    report=json.loads((tmp_path/'intermediate/video/status.json').read_text())
+    report=json.loads((tmp_path/'existing_status.json').read_text())
     assert report['status']=='failed' and report['code']=='no_human_pose'
     assert output.read_bytes()==b'old result'
+    assert list((tmp_path/'intermediate').iterdir()) == []
 
 
 def test_cli_unexpected_failure_prints_plain_traceback(tmp_path, monkeypatch):

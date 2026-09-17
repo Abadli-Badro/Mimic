@@ -1,10 +1,11 @@
 """Render example GLBs beside their overlays using NumPy and OpenCV.
 
 Run from the project root: python examples/render_comparisons.py
-Requires the matching output/intermediate/<name>/rotations.npz for source timing.
+Requires the matching <name>_status.json beside the animation for source timing.
 The preview uses neutral shaded materials and an orthographic front camera.
 """
 from pathlib import Path
+import json
 
 import cv2
 import numpy as np
@@ -87,8 +88,10 @@ def deform(scene, time):
 def render(name):
     folder = ROOT / 'examples' / 'animations'
     scene = load_scene(folder / f'{name}.glb')
-    with np.load(ROOT / 'output' / 'intermediate' / name / 'rotations.npz') as meta:
-        start, count, fps = int(meta['first_frame']), int(meta['num_frames']), float(meta['fps'])
+    meta = json.loads((folder / f'{name}_status.json').read_text(encoding='utf-8'))
+    if meta['status'] != 'complete':
+        raise ValueError('Comparison requires a completed pipeline run')
+    start, count, fps = int(meta['first_frame']), int(meta['source_frames']), float(meta['source_fps'])
     # Fit one fixed camera to the entire clip so the model never changes size.
     poses = [deform(scene, i / fps) for i in range(count)]
     all_vertices = np.concatenate([v for pose in poses for v, _ in pose])

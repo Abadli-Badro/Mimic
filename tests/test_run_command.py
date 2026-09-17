@@ -39,9 +39,11 @@ def test_run_command_uses_one_extraction_and_optional_overlay(tmp_path,monkeypat
     result=CliRunner().invoke(app,args)
     assert result.exit_code==0,result.output
     assert calls==['extract','smooth','solve']+(['merge'] if format=='glb' else [])+['overlay']
-    report=json.loads((tmp_path/'intermediate/video/status.json').read_text())
+    output_name = 'video_animated' if format == 'glb' else 'video'
+    report=json.loads((tmp_path/f'{output_name}_status.json').read_text())
     assert report['status']=='complete'
     assert 'overlay' in report
+    assert list((tmp_path/'intermediate').iterdir()) == []
 
 
 def test_run_rejects_model_for_bvh_before_processing():
