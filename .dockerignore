@@ -1,0 +1,17 @@
+# Only application sources and required runtime assets enter the build context.
+**
+!Dockerfile
+!pyproject.toml
+!README.md
+!LICENSE
+!mimic/
+!mimic/**
+!interfaces/
+!interfaces/**
+!data/
+!data/models/
+!data/models/pose_landmarker.task
+!data/models/model.glb
+**/__pycache__/
+**/*.pyc
+**/*.pyo

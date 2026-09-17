@@ -1,5 +1,32 @@
 # Local conversion API
 
+## Docker
+
+Use Docker Desktop with Linux containers. From the project root:
+
+```cmd
+docker compose up --build -d
+docker compose logs -f api
+```
+
+This builds `mimic-api:latest` and serves `http://localhost:8000/docs`.
+The image includes `data/models/pose_landmarker.task` and `data/models/model.glb`;
+both must exist before building. It runs as a non-root user and installs the
+EGL/GLES libraries required by MediaPipe. Local uploads, archives, examples,
+virtual environments, and Git metadata are excluded from the build context.
+
+Outputs persist in the `mimic-output` named volume across container replacement.
+Stop with `docker compose down`; adding `-v` also deletes that volume and its jobs.
+Keep one API container per output volume. The API retains its 50 MB upload limit.
+
+To build the image without starting it:
+
+```cmd
+docker build -t mimic-api:latest .
+```
+
+## Python
+
 Install and start from the project root:
 
 ```cmd
@@ -40,7 +67,7 @@ with the animation. `stopped_bones` explains a successful shortened export.
 
 ## Resource use and lifecycle
 
-- Upload bytes are streamed to disk; the 250 MiB limit is enforced even without
+- Upload bytes are streamed to disk; the 50 MB (50,000,000 bytes) limit is enforced even without
   a Content-Length header. Empty uploads return 400; oversized uploads return 413.
 - Four slots cover uploading, queued, and running jobs combined. A full queue
   returns 429 with Retry-After. A single spawned process runs conversions so

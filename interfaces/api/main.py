@@ -16,12 +16,12 @@ import anyio
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 
-from mimic.config import OUTPUT_DIR, VIDEO_LIMITS
+from mimic.config import OUTPUT_DIR
 from interfaces.api.jobs import convert_job, read_record, write_record
 
 
 def create_app(root: Optional[Path] = None, capacity: int = 4,
-               max_upload_bytes: int = VIDEO_LIMITS.max_file_bytes,
+               max_upload_bytes: int = 50_000_000,
                executor_factory=None):
     root = (root or OUTPUT_DIR / 'jobs').resolve()
     slots = BoundedSemaphore(capacity)

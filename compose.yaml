@@ -1,0 +1,13 @@
+services:
+  api:
+    build: .
+    image: mimic-api:latest
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - mimic-output:/app/output
+    init: true
+    stop_grace_period: 5m
+
+volumes:
+  mimic-output:

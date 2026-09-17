@@ -305,6 +305,14 @@ FBX export and the web frontend are not implemented. A local conversion API is a
 
 ### Local API
 
+With Docker Desktop running Linux containers:
+
+```cmd
+docker compose up --build -d
+```
+
+Or run directly with Python:
+
 ```cmd
 python -m pip install -e ".[api]"
 python -m uvicorn interfaces.api.main:app --host 127.0.0.1 --port 8000
