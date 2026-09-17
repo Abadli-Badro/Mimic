@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="630" viewBox="0 0 1100 630" role="img" aria-labelledby="title desc">
+<title id="title">C4 / Level 2: Containers</title><desc id="desc">Local deployment: the CLI and core library execute in one Python process; no web service is implemented.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/></marker></defs>
+<rect width="100%" height="100%" fill="#f8fafc"/>
+<g font-family="Arial, sans-serif"><text x="36" y="43" font-size="25" font-weight="bold" fill="#0f172a">C4 / Level 2: Containers</text>
+<text x="36" y="72" font-size="14" fill="#475569">Local deployment: the CLI and core library execute in one Python process; no web service is implemented.</text>
+<rect x="50" y="155" width="250" height="155" rx="10" fill="#175b99"/>
+<text x="175.0" y="185" text-anchor="middle" font-size="18" fill="white">Command-line application</text>
+<text x="175.0" y="208" text-anchor="middle" font-size="12" fill="white">[Container: Python / Typer]</text>
+<text x="175.0" y="235" text-anchor="middle" font-size="13" fill="white">interfaces/cli/main.py</text>
+<text x="175.0" y="254" text-anchor="middle" font-size="13" fill="white">Arguments, help and errors</text>
+<text x="175.0" y="273" text-anchor="middle" font-size="13" fill="white">mimic run / convert / merge</text>
+<rect x="470" y="155" width="280" height="155" rx="10" fill="#175b99"/>
+<text x="610.0" y="185" text-anchor="middle" font-size="18" fill="white">Conversion library</text>
+<text x="610.0" y="208" text-anchor="middle" font-size="12" fill="white">[In-process Python library]</text>
+<text x="610.0" y="235" text-anchor="middle" font-size="13" fill="white">mimic/pipeline.py</text>
+<text x="610.0" y="254" text-anchor="middle" font-size="13" fill="white">Coordinates processing and export</text>
+<text x="610.0" y="273" text-anchor="middle" font-size="13" fill="white">OpenCV, MediaPipe, SciPy</text>
+<rect x="850" y="155" width="210" height="155" rx="10" fill="#526174"/>
+<text x="955.0" y="185" text-anchor="middle" font-size="18" fill="white">Input assets</text>
+<text x="955.0" y="208" text-anchor="middle" font-size="12" fill="white">[File store]</text>
+<text x="955.0" y="235" text-anchor="middle" font-size="13" fill="white">data/input/</text>
+<text x="955.0" y="254" text-anchor="middle" font-size="13" fill="white">data/models/</text>
+<text x="955.0" y="273" text-anchor="middle" font-size="13" fill="white">Video + pose model + rig</text>
+<rect x="470" y="445" width="280" height="135" rx="10" fill="#087e8b"/>
+<text x="610.0" y="475" text-anchor="middle" font-size="18" fill="white">Generated artifacts</text>
+<text x="610.0" y="498" text-anchor="middle" font-size="12" fill="white">[File store]</text>
+<text x="610.0" y="525" text-anchor="middle" font-size="13" fill="white">output/</text>
+<text x="610.0" y="544" text-anchor="middle" font-size="13" fill="white">GLB / BVH / overlay MP4</text>
+<text x="610.0" y="563" text-anchor="middle" font-size="13" fill="white">NPZ checkpoints + status.json</text>
+<path d="M300 225 H470" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="385" y="195" text-anchor="middle" font-size="12" fill="#334155" stroke="#f8fafc" stroke-width="5" paint-order="stroke">Calls Python functions</text>
+<path d="M850 225 H750" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="800" y="195" text-anchor="middle" font-size="12" fill="#334155" stroke="#f8fafc" stroke-width="5" paint-order="stroke">Reads</text>
+<path d="M610 310 V445" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="684" y="374" text-anchor="middle" font-size="12" fill="#334155" stroke="#f8fafc" stroke-width="5" paint-order="stroke">Publishes files</text>
+</g></svg>

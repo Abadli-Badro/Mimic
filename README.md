@@ -1,11 +1,81 @@
-﻿# Mimic
+<div align="center">
 
-Convert a video of one person into an in-place animated character GLB or a
-skeleton BVH. Optional overlays show the detected landmarks on the source video.
+<h1>Mimic</h1>
+<p><strong>Turn a video into a 3D animation.</strong></p>
+<p>Single-person motion capture &middot; Animated GLB &middot; Skeleton BVH &middot; Local Python pipeline</p>
 
-## Setup
+<p>
+  <a href="#demo">Demo</a> &nbsp; / &nbsp;
+  <a href="#quick-start">Quick start</a> &nbsp; / &nbsp;
+  <a href="#usage">Usage</a> &nbsp; / &nbsp;
+  <a href="#architecture">Architecture</a> &nbsp; / &nbsp;
+  <a href="#reference">Reference</a>
+</p>
 
-From the project root, create a virtual environment and install the project.
+<a href="examples/animations/Sneaky%20walk%20reference_comparison.mp4">
+  <img src="figs/sneaky-walk-comparison.gif" alt="Sneaky Walk side-by-side: source pose overlay and exported character animation" width="960">
+</a>
+
+<p><a href="examples/animations/Sneaky%20walk%20reference_comparison.mp4">Watch / download the video</a></p>
+
+</div>
+
+Mimic takes footage of one person, reconstructs body motion, and exports an
+in-place animation for a rigged character or skeleton. One command handles
+extraction, filtering, rotation solving, export, and an optional overlay video.
+
+| Capture | Reconstruct | Export |
+| :--- | :--- | :--- |
+| Detect body landmarks and track one person | Smooth motion and interpolate short tracking gaps | Animate a character in GLB or export a BVH skeleton |
+
+## Demo
+
+**From video to animation.** The GIF above shows Sneaky Walk's pose overlay
+on the left and its exported character animation on the right, synchronized
+to the source footage.
+
+**From rotations to a character.** These three poses are rendered from an earlier
+Sneaky Walk GLB using the character's skin weights:
+
+<p align="center">
+  <img src="figs/skinned-mesh-preview.png" alt="Three poses from the exported Sneaky Walk character animation" width="900">
+</p>
+
+<sub>The GIF and character still are recorded examples, not a live preview.</sub>
+
+### Try the examples
+
+**Overlay and exported animation, side by side:**
+
+| Dance | Sneaky walk |
+| --- | --- |
+| [![Dance comparison](examples/animations/Dance%20Reference_comparison.jpg)](examples/animations/Dance%20Reference_comparison.mp4) | [![Sneaky walk comparison](examples/animations/Sneaky%20walk%20reference_comparison.jpg)](examples/animations/Sneaky%20walk%20reference_comparison.mp4) |
+
+Click a preview to open the comparison video. The right panel renders the actual
+GLB skin and animation with neutral shading. Comparisons cover only the retained
+animation frames, aligned to the source video (Sneaky Walk starts at frame 40).
+
+Download a character GLB to view the exported animation, or watch its overlay
+to inspect the detected pose on the original footage.
+
+| Example | Source video | Pose overlay | Animated character |
+| --- | --- | --- | --- |
+| Dance | [MP4](examples/sample_videos/Dance%20Reference.mp4) | [MP4](examples/animations/Dance%20Reference_overlay.mp4) | [GLB](examples/animations/Dance%20Reference.glb) |
+| Sneaky walk | [MP4](examples/sample_videos/Sneaky%20walk%20reference.mp4) | [MP4](examples/animations/Sneaky%20walk%20reference_overlay.mp4) | [GLB](examples/animations/Sneaky%20walk%20reference.glb) |
+
+Regenerate both examples from the project root:
+
+```cmd
+mimic run "examples/sample_videos/Dance Reference.mp4" --format glb --overlay --max-missing-frames 20 -o "examples/animations/Dance Reference.glb"
+mimic run "examples/sample_videos/Sneaky walk reference.mp4" --format glb --overlay --max-missing-frames 20 -o "examples/animations/Sneaky walk reference.glb"
+```
+
+Overlays cover the source footage. GLB animations can end earlier when a bone
+exceeds the 20-frame missing-observation limit.
+
+## Quick start
+
+Create a virtual environment from the project root and install the project.
 Python 3.11 is the environment used for development; package metadata permits
 Python 3.9 and later.
 
@@ -20,11 +90,16 @@ Activate it in **Command Prompt**:
 .venv\Scripts\activate.bat
 ```
 
+<details>
+<summary>Using PowerShell?</summary>
+
 Or in **PowerShell**:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 ```
+
+</details>
 
 Required assets:
 
@@ -36,7 +111,7 @@ Required assets:
 The model files are not downloaded automatically. If the pose model is missing,
 extraction reports its expected path and a download URL.
 
-## Run the entire pipeline
+## Usage
 
 ```cmd
 mimic run "data/input/Dance Reference.mp4" --format glb --overlay --max-missing-frames 20
@@ -57,7 +132,46 @@ it also applies the animation to the character model.
 
 Omit `--overlay` to skip video generation. Use `mimic run --help` for help.
 
-### Output files
+## Architecture
+
+Mimic runs locally in one Python process. The C4 views below move from the
+system's users and files to its runtime layout and conversion components.
+
+### 1. System context
+
+<p align="center">
+  <img src="figs/c4-context.svg" alt="C4 level 1: creator, Mimic, input assets, and consuming 3D application" width="100%">
+</p>
+
+<details>
+<summary><strong>2 &middot; Containers &middot; CLI, library, and file stores</strong></summary>
+
+The command-line application calls the conversion library in the same Python
+process. The library is not a separately deployed service.
+
+<img src="figs/c4-containers.svg" alt="C4 level 2: local Python application and file stores" width="100%">
+
+</details>
+
+<details>
+<summary><strong>3 &middot; Components &middot; inside the conversion pipeline</strong></summary>
+
+Extraction feeds tracking and smoothing, then rotation solving and export.
+Shared validation and artifact utilities support the pipeline; overlay rendering
+is optional.
+
+<img src="figs/c4-components.svg" alt="C4 level 3: extraction, tracking, solving, export, and supporting components" width="100%">
+
+</details>
+
+[Explore the module structure](docs/STRUCTURE.md) &middot; [Read the animation conventions](docs/ANIMATION_PIPELINE.md)
+
+## Reference
+
+Command examples, output locations, and troubleshooting are collected below.
+
+<details>
+<summary><strong>Output files and checkpoints</strong></summary>
 
 Defaults for the examples above:
 
@@ -82,7 +196,10 @@ The overlay shows the **full source video and raw detections**. It may continue
 after a tracking timeout ends the exported animation. Runs with the same video
 stem share the checkpoint directory; use distinct stems to keep runs separate.
 
-## Missing-frame timers
+</details>
+
+<details>
+<summary><strong>Missing-frame timers</strong></summary>
 
 Each bone has its own timer. A reliable observation resets it. With the default
 of 20, up to 20 consecutive missing source frames are allowed; the 21st is
@@ -104,7 +221,10 @@ BONE_MISSING_FRAME_LIMITS = {"left_hand": 30, "right_hand": 30}
 Names come from `BONE_ORDER` in `mimic/processing/rotation_solver.py`. Overrides
 win over the CLI default. Timers count source frames before `--fps` resampling.
 
-## Individual commands
+</details>
+
+<details>
+<summary><strong>Individual commands</strong></summary>
 
 | Command | Purpose | Example |
 | --- | --- | --- |
@@ -127,7 +247,10 @@ mimic visualize "data/input/Dance Reference.mp4" --npz "output/intermediate/Danc
 `--max-missing-frames` is available on `run` and `convert`. Standalone `smooth`
 uses the configuration defaults. All commands support `-h` and `--help`.
 
-## Input checks and troubleshooting
+</details>
+
+<details>
+<summary><strong>Input checks and troubleshooting</strong></summary>
 
 Default video limits in `mimic/config.py`:
 
@@ -171,7 +294,9 @@ If `mimic` resolves to a different Python installation, use the project interpre
 .venv\Scripts\python.exe -m interfaces.cli.main run "data/input/Dance Reference.mp4" --overlay
 ```
 
-## Limitations
+</details>
+
+## Current limits
 
 Motion is in place: root travel and foot locking are not reconstructed. Fingers
 stay in the character's rest pose; limb twist and spine motion are approximations.
@@ -187,6 +312,6 @@ FBX export and the web/API interface are not implemented.
 - [Module structure](docs/STRUCTURE.md)
 - [Animation conventions and data flow](docs/ANIMATION_PIPELINE.md)
 
-## License
+---
 
-MIT
+<p align="center">Mimic &middot; <a href="LICENSE">MIT License</a></p>

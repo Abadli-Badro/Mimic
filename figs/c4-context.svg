@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620" role="img" aria-labelledby="title desc">
+<title id="title">C4 / Level 1: System context</title><desc id="desc">Mimic converts single-person video into in-place animation on a local machine.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/></marker></defs>
+<rect width="100%" height="100%" fill="#f8fafc"/>
+<g font-family="Arial, sans-serif"><text x="36" y="43" font-size="25" font-weight="bold" fill="#0f172a">C4 / Level 1: System context</text>
+<text x="36" y="72" font-size="14" fill="#475569">Mimic converts single-person video into in-place animation on a local machine.</text>
+<rect x="40" y="180" width="220" height="140" rx="10" fill="#526174"/>
+<text x="150.0" y="210" text-anchor="middle" font-size="18" fill="white">Creator</text>
+<text x="150.0" y="233" text-anchor="middle" font-size="12" fill="white">[Person]</text>
+<text x="150.0" y="260" text-anchor="middle" font-size="13" fill="white">Supplies video and a rig</text>
+<text x="150.0" y="279" text-anchor="middle" font-size="13" fill="white">Runs commands; reviews motion</text>
+<rect x="410" y="180" width="280" height="140" rx="10" fill="#175b99"/>
+<text x="550.0" y="210" text-anchor="middle" font-size="18" fill="white">Mimic</text>
+<text x="550.0" y="233" text-anchor="middle" font-size="12" fill="white">[Software system]</text>
+<text x="550.0" y="260" text-anchor="middle" font-size="13" fill="white">Extracts, filters and solves motion</text>
+<text x="550.0" y="279" text-anchor="middle" font-size="13" fill="white">Exports GLB or BVH</text>
+<rect x="840" y="180" width="220" height="140" rx="10" fill="#526174"/>
+<text x="950.0" y="210" text-anchor="middle" font-size="18" fill="white">3D application</text>
+<text x="950.0" y="233" text-anchor="middle" font-size="12" fill="white">[External system]</text>
+<text x="950.0" y="260" text-anchor="middle" font-size="13" fill="white">Imports exported animation</text>
+<text x="950.0" y="279" text-anchor="middle" font-size="13" fill="white">Playback and further editing</text>
+<rect x="410" y="435" width="280" height="130" rx="10" fill="#087e8b"/>
+<text x="550.0" y="465" text-anchor="middle" font-size="18" fill="white">Local project assets</text>
+<text x="550.0" y="488" text-anchor="middle" font-size="12" fill="white">[Files]</text>
+<text x="550.0" y="515" text-anchor="middle" font-size="13" fill="white">Video, pose model, character rig</text>
+<text x="550.0" y="534" text-anchor="middle" font-size="13" fill="white">Exports, checkpoints, previews</text>
+<path d="M260 235 H410" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="335" y="209" text-anchor="middle" font-size="12" fill="#334155" stroke="#f8fafc" stroke-width="5" paint-order="stroke">Runs CLI commands</text>
+<path d="M690 250 H840" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="765" y="221" text-anchor="middle" font-size="12" fill="#334155" stroke="#f8fafc" stroke-width="5" paint-order="stroke">GLB / BVH files</text>
+<path d="M510 435 V320" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="447" y="376" text-anchor="middle" font-size="12" fill="#334155" stroke="#f8fafc" stroke-width="5" paint-order="stroke">Reads inputs</text>
+<path d="M600 320 V435" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="663" y="376" text-anchor="middle" font-size="12" fill="#334155" stroke="#f8fafc" stroke-width="5" paint-order="stroke">Writes results</text>
+</g></svg>

@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="585" viewBox="0 0 1100 585" role="img" aria-labelledby="title desc">
+<title id="title">C4 / Level 3: Conversion components</title><desc id="desc">Inside the Python library. Shared validation and artifact utilities support every file workflow.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/></marker></defs>
+<rect width="100%" height="100%" fill="#f8fafc"/>
+<g font-family="Arial, sans-serif"><text x="36" y="43" font-size="25" font-weight="bold" fill="#0f172a">C4 / Level 3: Conversion components</text>
+<text x="36" y="72" font-size="14" fill="#475569">Inside the Python library. Shared validation and artifact utilities support every file workflow.</text>
+<rect x="35" y="145" width="245" height="135" rx="10" fill="#175b99"/>
+<text x="157.5" y="175" text-anchor="middle" font-size="18" fill="white">Video &amp; pose extraction</text>
+<text x="157.5" y="198" text-anchor="middle" font-size="12" fill="white">[Component]</text>
+<text x="157.5" y="225" text-anchor="middle" font-size="13" fill="white">video_reader / pose_extractor</text>
+<text x="157.5" y="244" text-anchor="middle" font-size="13" fill="white">pose_selection / quality</text>
+<text x="157.5" y="263" text-anchor="middle" font-size="13" fill="white">video_to_landmarks</text>
+<rect x="420" y="145" width="245" height="135" rx="10" fill="#175b99"/>
+<text x="542.5" y="175" text-anchor="middle" font-size="18" fill="white">Tracking &amp; smoothing</text>
+<text x="542.5" y="198" text-anchor="middle" font-size="12" fill="white">[Component]</text>
+<text x="542.5" y="225" text-anchor="middle" font-size="13" fill="white">tracking / smoothing</text>
+<text x="542.5" y="244" text-anchor="middle" font-size="13" fill="white">smooth_landmarks</text>
+<text x="542.5" y="263" text-anchor="middle" font-size="13" fill="white">Per-bone timeout + filtering</text>
+<rect x="810" y="145" width="245" height="135" rx="10" fill="#175b99"/>
+<text x="932.5" y="175" text-anchor="middle" font-size="18" fill="white">Rotation solving</text>
+<text x="932.5" y="198" text-anchor="middle" font-size="12" fill="white">[Component]</text>
+<text x="932.5" y="225" text-anchor="middle" font-size="13" fill="white">rotation_solver</text>
+<text x="932.5" y="244" text-anchor="middle" font-size="13" fill="white">landmarks_to_rotations</text>
+<text x="932.5" y="263" text-anchor="middle" font-size="13" fill="white">Local quaternion interpolation</text>
+<rect x="810" y="400" width="245" height="135" rx="10" fill="#175b99"/>
+<text x="932.5" y="430" text-anchor="middle" font-size="18" fill="white">Retarget &amp; export</text>
+<text x="932.5" y="453" text-anchor="middle" font-size="12" fill="white">[Component]</text>
+<text x="932.5" y="480" text-anchor="middle" font-size="13" fill="white">retarget / skeleton</text>
+<text x="932.5" y="499" text-anchor="middle" font-size="13" fill="white">bvh_writer / gltf_writer</text>
+<text x="932.5" y="518" text-anchor="middle" font-size="13" fill="white">merge_animation</text>
+<rect x="420" y="400" width="245" height="135" rx="10" fill="#087e8b"/>
+<text x="542.5" y="430" text-anchor="middle" font-size="18" fill="white">Overlay rendering</text>
+<text x="542.5" y="453" text-anchor="middle" font-size="12" fill="white">[Optional component]</text>
+<text x="542.5" y="480" text-anchor="middle" font-size="13" fill="white">extraction/overlay.py</text>
+<text x="542.5" y="499" text-anchor="middle" font-size="13" fill="white">Raw detections on source video</text>
+<text x="542.5" y="518" text-anchor="middle" font-size="13" fill="white">Keeps source-video timing</text>
+<rect x="35" y="400" width="245" height="135" rx="10" fill="#526174"/>
+<text x="157.5" y="430" text-anchor="middle" font-size="18" fill="white">Boundary checks &amp; I/O</text>
+<text x="157.5" y="453" text-anchor="middle" font-size="12" fill="white">[Shared components]</text>
+<text x="157.5" y="480" text-anchor="middle" font-size="13" fill="white">validation / gltf_validation</text>
+<text x="157.5" y="499" text-anchor="middle" font-size="13" fill="white">errors / artifacts</text>
+<text x="157.5" y="518" text-anchor="middle" font-size="13" fill="white">Atomic files and run status</text>
+<path d="M280 207 H420" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="350" y="184" text-anchor="middle" font-size="12" fill="#334155" stroke="#f8fafc" stroke-width="5" paint-order="stroke">Landmark arrays</text>
+<path d="M665 207 H810" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="738" y="184" text-anchor="middle" font-size="12" fill="#334155" stroke="#f8fafc" stroke-width="5" paint-order="stroke">Retained motion</text>
+<path d="M932 280 V400" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="999" y="345" text-anchor="middle" font-size="12" fill="#334155" stroke="#f8fafc" stroke-width="5" paint-order="stroke">Rotation tracks</text>
+<path d="M280 257 H335 V360 H542 V400" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="542" y="342" text-anchor="middle" font-size="12" fill="#334155" stroke="#f8fafc" stroke-width="5" paint-order="stroke">Raw landmarks + source video</text>
+</g></svg>
