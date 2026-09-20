@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import multiprocessing
+import os
 import shutil
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import asynccontextmanager
@@ -18,6 +19,7 @@ from fastapi.responses import FileResponse
 
 from mimic.config import OUTPUT_DIR
 from interfaces.api.jobs import convert_job, read_record, write_record
+from interfaces.api.rate_limit import RateLimitMiddleware
 
 
 def create_app(root: Optional[Path] = None, capacity: int = 4,
@@ -50,6 +52,11 @@ def create_app(root: Optional[Path] = None, capacity: int = 4,
             await asyncio.to_thread(app.state.executor.shutdown, wait=True)
 
     app = FastAPI(title='Mimic API', version='0.1.0', lifespan=lifespan)
+    app.add_middleware(
+        RateLimitMiddleware,
+        uploads=int(os.environ.get('MIMIC_UPLOADS_PER_MINUTE', '10')),
+        requests=int(os.environ.get('MIMIC_REQUESTS_PER_MINUTE', '120')),
+    )
 
     def folder_for(job_id: UUID):
         folder = root / str(job_id)

@@ -16,6 +16,7 @@ dependencies = [
     "scipy>=1.11",
     "pygltflib>=1.16",
     "typer>=0.9",
+    "imageio-ffmpeg>=0.6.0",
 ]
 
 [project.optional-dependencies]

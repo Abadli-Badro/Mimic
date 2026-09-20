@@ -67,6 +67,36 @@ with the animation. `stopped_bones` explains a successful shortened export.
 
 ## Resource use and lifecycle
 
+### Rate limits
+
+Each client IP gets separate 60-second windows for:
+
+- Upload attempts (`POST /api/jobs`): **10 per minute**.
+- Other API requests, including polling, downloads, and deletion: **120 per minute**.
+
+Rejected requests return HTTP 429, JSON `code: "rate_limited"`, and a
+`Retry-After` header in seconds. Attempts that fail validation still count.
+Health checks and OPTIONS requests are exempt. The conversion queue's existing
+429 response is separate from these limits.
+
+Configure positive integer limits before starting the server:
+
+```powershell
+$env:MIMIC_UPLOADS_PER_MINUTE = "10"
+$env:MIMIC_REQUESTS_PER_MINUTE = "120"
+```
+
+Limits are in memory, reset on restart, and apply to one API process. Fixed
+windows may allow a burst across a window boundary. Clients sharing an IP also
+share its allowance. At most 10,000 active client/bucket entries are retained;
+new entries are rejected until space expires if that limit is reached.
+
+The middleware uses the ASGI client address and does not read forwarding headers
+itself. Behind a reverse proxy, configure Uvicorn to trust forwarded addresses
+only from that proxy; otherwise clients may share the proxy's IP allowance.
+Do not trust arbitrary public forwarding headers. Distributed deployments need
+a shared limiter or rate limiting at the gateway.
+
 - Upload bytes are streamed to disk; the 50 MB (50,000,000 bytes) limit is enforced even without
   a Content-Length header. Empty uploads return 400; oversized uploads return 413.
 - Four slots cover uploading, queued, and running jobs combined. A full queue

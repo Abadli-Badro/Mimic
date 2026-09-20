@@ -9,6 +9,7 @@ from mimic.errors import stage, MimicError
 from mimic.artifacts import load_npz, atomic_output, output_path as check_output
 from mimic.validation import landmarks, number
 from mimic.extraction.video_reader import get_video_info
+from mimic.extraction.browser_video import encode_browser_video
 
 import cv2
 import numpy as np
@@ -139,6 +140,7 @@ def generate_overlay_video(
                     raise MimicError('video_encode', 'MP4 encoder did not write all overlay frames.')
             finally:
                 check.release()
+            encode_browser_video(temporary)
     finally:
         cap.release()
         if writer is not None:
