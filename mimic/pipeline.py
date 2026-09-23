@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import time
 
 from mimic.config import output_file, MAX_MISSING_BONE_FRAMES
 from mimic.errors import stage
@@ -72,23 +73,32 @@ def run(
         output_path.with_name(output_path.stem + '_status.json')
     ) as report:
         work_dir = Path(temporary)
+        run_started = time.perf_counter()
+
         # Extract landmarks
         print("Extracting landmarks...")
+        stage_started = time.perf_counter()
         npz_path = do_extract(video_path, work_dir / "landmarks.npz")
+        report["extract_ms"] = int((time.perf_counter() - stage_started) * 1000)
 
         # Smooth
         report["stage"] = "smoothing"
         print("Smoothing landmarks...")
+        stage_started = time.perf_counter()
         smooth_path = do_smooth(npz_path, work_dir / "landmarks_smooth.npz", min_cutoff, beta, max_missing_frames, bone_limits)
+        report["smooth_ms"] = int((time.perf_counter() - stage_started) * 1000)
 
         # Solve rotations
         report["stage"] = "rotation solving"
         print("Solving rotations...")
+        stage_started = time.perf_counter()
         rot_path = do_solve(smooth_path, work_dir / "rotations.npz")
+        report["solve_ms"] = int((time.perf_counter() - stage_started) * 1000)
 
         # Retarget to Mixamo
         report["stage"] = "retargeting"
         print("Retargeting to Mixamo skeleton...")
+        stage_started = time.perf_counter()
         data = load_npz(rot_path)
         internal_rotations = {}
         for key in data:
@@ -118,9 +128,11 @@ def run(
             output_fps = float(fps)
         report['fps'] = output_fps
         report['exported_frames'] = len(next(iter(internal_rotations.values())))
+        report["retarget_ms"] = int((time.perf_counter() - stage_started) * 1000)
 
         report["stage"] = "export"
         print(f"Exporting as {format.upper()}...")
+        stage_started = time.perf_counter()
         if format == "bvh":
             write_bvh(internal_rotations, output_fps, output_path)
         else:
@@ -134,13 +146,17 @@ def run(
             from mimic.export.merge_animation import merge_animation
             report['stage'] = 'model merge'
             merge_animation(model_path, skeleton_path, output_path)
+        report["export_ms"] = int((time.perf_counter() - stage_started) * 1000)
         if overlay:
             from mimic.extraction.overlay import generate_overlay_video
             report['stage'] = 'overlay export'
+            stage_started = time.perf_counter()
             overlay_path = output_path.with_name(output_path.stem + '_overlay.mp4')
             generate_overlay_video(video_path, npz_path, overlay_path)
             report['overlay'] = str(overlay_path)
+            report["overlay_ms"] = int((time.perf_counter() - stage_started) * 1000)
             print(f"Overlay: {overlay_path}")
+        report['total_ms'] = int((time.perf_counter() - run_started) * 1000)
         report['output'] = str(output_path)
-        print(f"Done! Output: {output_path}")
+        print(f"Done! Output: {output_path} ({report['total_ms']} ms)")
         return output_path

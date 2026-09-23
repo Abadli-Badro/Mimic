@@ -10,7 +10,8 @@
 !interfaces/**
 !data/
 !data/models/
-!data/models/pose_landmarker.task
+!data/models/pose_landmarker_lite.task
+!data/models/pose_landmarker_heavy.task
 !data/models/model.glb
 **/__pycache__/
 **/*.pyc

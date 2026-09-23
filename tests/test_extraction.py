@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from mimic.extraction.pose_extractor import LANDMARK_NAMES, POSE_CONNECTIONS
-from mimic.extraction.video_reader import get_video_info, read_frames
+from mimic.extraction.video_reader import get_video_info, read_frames, stream_frames
 
 
 @pytest.fixture
@@ -50,6 +50,17 @@ class TestVideoReader:
         with pytest.raises(FileNotFoundError):
             read_frames(tmp_path / "nonexistent.mp4")
 
+    def test_stream_frames_yields_all_and_downscales(self, synthetic_video: Path) -> None:
+        fps, frames = stream_frames(synthetic_video, max_width=160)
+        collected = list(frames)
+        assert len(collected) == 20
+        assert fps == pytest.approx(24.0)
+        assert collected[0].shape[1] == 160
+
+    def test_stream_frames_nonexistent_file(self, tmp_path: Path) -> None:
+        with pytest.raises(FileNotFoundError):
+            stream_frames(tmp_path / "nonexistent.mp4")
+
     def test_get_video_info(self, synthetic_video: Path) -> None:
         info = get_video_info(synthetic_video)
         assert info["fps"] == pytest.approx(24.0)
@@ -78,7 +89,7 @@ class TestPoseExtractor:
             extract_landmarks(frames, model_path=tmp_path / "missing.task")
 
     @pytest.mark.skipif(
-        not Path("data/models/pose_landmarker.task").exists(),
+        not Path("data/models/pose_landmarker_lite.task").exists(),
         reason="MediaPipe model not downloaded",
     )
     def test_extract_landmarks_output_shapes(self, synthetic_video: Path) -> None:

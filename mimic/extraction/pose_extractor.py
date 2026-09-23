@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import queue
+import threading
 from pathlib import Path
+from typing import Iterable, Iterator
 
 import cv2
 import mediapipe as mp
@@ -10,7 +13,7 @@ import numpy as np
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
-from mimic.config import MEDIAPIPE_MODEL_PATH
+from mimic.config import FRAME_WIDTH, MEDIAPIPE_MODEL_PATH, MEDIAPIPE_MODEL_VARIANT
 from mimic.errors import MimicError
 from mimic.validation import number
 from mimic.extraction.pose_selection import PoseSelector
@@ -65,15 +68,50 @@ POSE_CONNECTIONS = [
 ]
 
 
+def _prefetch(produce, maxsize: int = 2) -> Iterator:
+    """Consume produce() on a daemon thread into a bounded queue.
+
+    Overlaps decode/resize/color-convert with MediaPipe inference while
+    preserving order. Producer exceptions are re-raised in the consumer.
+    """
+    items: queue.Queue = queue.Queue(maxsize=maxsize)
+    errors: list = []
+
+    def run():
+        try:
+            for item in produce():
+                items.put(item)
+        except BaseException as exc:
+            errors.append((exc, exc.__traceback__))
+        finally:
+            items.put(None)
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+
+    def consume():
+        while True:
+            item = items.get()
+            if item is None:
+                break
+            yield item
+        thread.join()
+        if errors:
+            exc, tb = errors[0]
+            raise exc.with_traceback(tb)
+
+    return consume()
+
+
 def extract_landmarks(
-    frames: list[np.ndarray],
+    frames: Iterable[np.ndarray],
     model_path: Path | None = None,
     fps: float | None = None,
 ) -> dict:
     """Extract 3D pose landmarks from each frame using MediaPipe Pose Landmarker.
 
     Args:
-        frames: List of BGR images.
+        frames: Iterable of BGR images (list or generator).
         model_path: Path to MediaPipe .task model file.
         fps: Video frame rate (used for timestamp calculation in VIDEO mode).
 
@@ -89,17 +127,27 @@ def extract_landmarks(
         raise FileNotFoundError(
             f"MediaPipe model not found: {model}\n"
             "Download from: https://storage.googleapis.com/mediapipe-models/pose_landmarker/"
-            "pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task"
+            f"pose_landmarker_{MEDIAPIPE_MODEL_VARIANT}/float16/1/"
+            f"pose_landmarker_{MEDIAPIPE_MODEL_VARIANT}.task"
         )
 
-    if not frames:
-        raise MimicError('empty_video', 'No frames were supplied for pose detection.')
     if fps is not None:
         number(fps, 'fps', maximum=240)
-    for i, frame in enumerate(frames):
-        if (not isinstance(frame, np.ndarray) or frame.ndim != 3
-                or frame.shape[2] != 3 or frame.dtype != np.uint8 or not frame.size):
-            raise MimicError('invalid_video_frame', f'Frame {i} must be a nonempty uint8 BGR image.')
+
+    source = iter(frames)
+    first = next(source, None)
+    if first is None:
+        raise MimicError('empty_video', 'No frames were supplied for pose detection.')
+
+    def validated():
+        frame, index = first, 0
+        while frame is not None:
+            if (not isinstance(frame, np.ndarray) or frame.ndim != 3
+                    or frame.shape[2] != 3 or frame.dtype != np.uint8 or not frame.size):
+                raise MimicError('invalid_video_frame', f'Frame {index} must be a nonempty uint8 BGR image.')
+            yield index, frame
+            index += 1
+            frame = next(source, None)
 
     base_options = python.BaseOptions(model_asset_path=str(model))
     options = vision.PoseLandmarkerOptions(
@@ -108,20 +156,30 @@ def extract_landmarks(
         num_poses=2,
     )
 
+    def prepared():
+        for i, frame in validated():
+            height, width = frame.shape[:2]
+            aspect_ratio = width / height
+            if width > FRAME_WIDTH:
+                scaled_height = max(1, int(round(height * FRAME_WIDTH / width)))
+                frame = cv2.resize(frame, (FRAME_WIDTH, scaled_height),
+                                   interpolation=cv2.INTER_AREA)
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) if len(frame.shape) == 3 else frame
+            yield i, aspect_ratio, rgb
+
     selector = PoseSelector(fps or 30.0)
     all_world = []
     all_2d = []
     all_visibility = []
 
     with vision.PoseLandmarker.create_from_options(options) as landmarker:
-        for i, frame in enumerate(frames):
+        for i, aspect_ratio, rgb in _prefetch(prepared):
             timestamp_ms = int((i / fps) * 1000) if fps else i * 33
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) if len(frame.shape) == 3 else frame
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
             result = landmarker.detect_for_video(mp_image, timestamp_ms)
 
             selected = selector.select(result.pose_landmarks, i, timestamp_ms,
-                                       aspect_ratio=frame.shape[1] / frame.shape[0])
+                                       aspect_ratio=aspect_ratio)
             if selected is not None and selected < len(result.pose_world_landmarks):
                 lm = result.pose_world_landmarks[selected]
                 coords = np.array([[p.x, -p.y, -p.z] for p in lm])

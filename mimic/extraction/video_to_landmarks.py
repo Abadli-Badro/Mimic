@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mimic.config import output_file
+from mimic.config import FRAME_WIDTH, output_file
 from mimic.errors import stage
 from mimic.artifacts import output_path as check_output, save_npz
 from mimic.validation import landmarks
@@ -13,7 +13,7 @@ from mimic.extraction.quality import validate_pose_quality
 import numpy as np
 
 from mimic.extraction.pose_extractor import extract_landmarks
-from mimic.extraction.video_reader import get_video_info, read_frames
+from mimic.extraction.video_reader import get_video_info, stream_frames
 
 
 @stage("extraction")
@@ -36,8 +36,8 @@ def extract(video_path: Path, output_path: Path | None = None) -> Path:
           f"{info['fps']:.1f} fps, {info['total_frames']} frames, "
           f"{info['duration']:.1f}s)")
 
-    frames, source_fps = read_frames(video_path)
-    print(f"Read {len(frames)} frames (effective fps: {source_fps:.1f})")
+    source_fps, frames = stream_frames(video_path, max_width=FRAME_WIDTH)
+    print(f"Streaming frames (effective fps: {source_fps:.1f}, max width {FRAME_WIDTH})")
 
     print("Running MediaPipe Pose Landmarker...")
     result = extract_landmarks(frames, fps=source_fps)

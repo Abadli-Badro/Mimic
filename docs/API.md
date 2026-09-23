@@ -10,8 +10,9 @@ docker compose logs -f api
 ```
 
 This builds `mimic-api:latest` and serves `http://localhost:8000/docs`.
-The image includes `data/models/pose_landmarker.task` and `data/models/model.glb`;
-both must exist before building. It runs as a non-root user and installs the
+The image includes `data/models/pose_landmarker_lite.task`,
+`data/models/pose_landmarker_heavy.task`, and `data/models/model.glb`;
+all must exist before building. It runs as a non-root user and installs the
 EGL/GLES libraries required by MediaPipe. Local uploads, archives, examples,
 virtual environments, and Git metadata are excluded from the build context.
 
@@ -52,7 +53,8 @@ This first version is for local use, without authentication or cross-origin acce
 Upload raw MP4 bytes, **not multipart form data**, with `Content-Type: video/mp4`.
 Options are query parameters: `format=glb|bvh`, `overlay=true|false`,
 `max_missing_frames=20`, and optional `fps=1..240`. GLB uses
-`data/models/model.glb`; pose extraction requires `data/models/pose_landmarker.task`.
+`data/models/model.glb`; pose extraction requires
+`data/models/pose_landmarker_lite.task` (override with `MIMIC_POSE_MODEL`).
 
 ```cmd
 curl.exe -X POST "http://127.0.0.1:8000/api/jobs?format=glb&overlay=true&max_missing_frames=20" -H "Content-Type: video/mp4" --data-binary "@examples/sample_videos/Sneaky walk reference.mp4"

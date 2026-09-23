@@ -173,6 +173,24 @@ def test_multiple_people_rejected_instead_of_selecting_first(tmp_path,monkeypatc
         module.extract_landmarks([np.zeros((32,32,3),dtype=np.uint8)]*10,model,30.)
 
 
+def test_landmarks_accept_frame_generator(tmp_path,monkeypatch):
+    from mimic.extraction import pose_extractor as module
+    model=tmp_path/'model.task';model.write_bytes(b'fake')
+    def person(x):
+        points=[SimpleNamespace(x=x,y=.4,z=0.,visibility=1.,presence=1.) for _ in range(33)]
+        points[23].y=points[24].y=.7
+        return points
+    class Detector:
+        def __enter__(self):return self
+        def __exit__(self,*args):pass
+        def detect_for_video(self,*args):
+            return SimpleNamespace(pose_world_landmarks=[person(.5)],pose_landmarks=[person(.5)])
+    monkeypatch.setattr(module.vision.PoseLandmarker,'create_from_options',lambda options:Detector())
+    frames=(np.zeros((32,32,3),dtype=np.uint8) for _ in range(4))
+    result=module.extract_landmarks(frames,model,30.)
+    assert result['world_landmarks'].shape==(4,33,3)
+
+
 def test_gltf_cycle_and_multiple_parents():
     for nodes in [[pygltflib.Node(children=[1]),pygltflib.Node(children=[0])],
                   [pygltflib.Node(children=[2]),pygltflib.Node(children=[2]),pygltflib.Node()]]:

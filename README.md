@@ -103,7 +103,9 @@ Or in **PowerShell**:
 
 Required assets:
 
-- `data/models/pose_landmarker.task`: MediaPipe Pose Landmarker model.
+- `data/models/pose_landmarker_lite.task`: MediaPipe Pose Landmarker model (default
+  variant; set `MIMIC_POSE_MODEL=heavy|full|lite` to select another, e.g.
+  `data/models/pose_landmarker_heavy.task`).
 - `data/models/model.glb`: rigged Mixamo-compatible character for GLB output.
   Use `--model` for another character. BVH does not require a character model.
 - Place source videos in `data/input/`, or supply another video path.

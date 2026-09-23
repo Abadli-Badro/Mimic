@@ -18,7 +18,7 @@ COPY mimic/ ./mimic/
 COPY interfaces/ ./interfaces/
 RUN --mount=type=cache,target=/root/.cache/pip python -m pip install -e '.[api]'
 
-COPY data/models/pose_landmarker.task data/models/model.glb ./data/models/
+COPY data/models/pose_landmarker_lite.task data/models/pose_landmarker_heavy.task data/models/model.glb ./data/models/
 RUN mkdir -p /app/output && chown mimic:mimic /app/output
 
 USER mimic

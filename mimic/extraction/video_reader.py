@@ -39,6 +39,60 @@ def get_video_info(video_path: Path, limits=None) -> dict:
         cap.release()
 
 
+def stream_frames(video_path: Path, target_fps: int | None = None, limits=None,
+                  max_width: int | None = None):
+    """Return (fps, frame_iterator) without holding the full clip in memory."""
+    limits = limits or VIDEO_LIMITS
+    info = get_video_info(video_path, limits)
+    fps = info['fps']
+    if target_fps is not None:
+        number(target_fps, 'target fps', maximum=limits.max_fps)
+    step = max(1, round(fps / target_fps)) if target_fps and target_fps < fps else 1
+    out_width, out_height = info['width'], info['height']
+    if max_width and out_width > max_width:
+        out_width = max_width
+        out_height = max(1, int(round(info['height'] * max_width / info['width'])))
+    estimated = ((info['total_frames'] + step - 1) // step) * out_width * out_height * 3
+    if estimated > limits.max_decoded_bytes:
+        raise MimicError('video_memory_limit', 'Decoded video exceeds the memory budget. Trim or downscale the clip.')
+
+    def frames():
+        cap = cv2.VideoCapture(str(video_path))
+        count = used = 0
+        try:
+            if not cap.isOpened():
+                raise MimicError('video_decode', f'Cannot open video: {video_path}')
+            while True:
+                ok, frame = cap.read()
+                if not ok:
+                    break
+                if frame is None or frame.shape != (info['height'], info['width'], 3) or frame.dtype != np.uint8:
+                    raise MimicError('invalid_video_frame', f'Invalid decoded frame {count}. Re-encode the video.')
+                count += 1
+                if count > limits.max_frames or count / fps > limits.max_duration_seconds:
+                    raise MimicError('video_duration', 'Decoded video exceeds the frame or duration limit.')
+                if (count - 1) % step == 0:
+                    if max_width and frame.shape[1] > max_width:
+                        height, width = frame.shape[:2]
+                        frame = cv2.resize(
+                            frame,
+                            (max_width, max(1, int(round(height * max_width / width)))),
+                            interpolation=cv2.INTER_AREA,
+                        )
+                    used += frame.nbytes
+                    if used > limits.max_decoded_bytes:
+                        raise MimicError('video_memory_limit', 'Decoded video exceeds the memory budget. Trim or downscale it.')
+                    yield frame
+            if not count:
+                raise MimicError('video_decode', 'Video contains no decodable frames.')
+            if count != info['total_frames']:
+                raise MimicError('truncated_video', f'Decoded {count} of {info["total_frames"]} advertised frames. Re-encode the video.')
+        finally:
+            cap.release()
+
+    return fps / step, frames()
+
+
 def read_frames(video_path: Path, target_fps: int | None = None, limits=None):
     limits = limits or VIDEO_LIMITS
     info = get_video_info(video_path, limits)

@@ -160,7 +160,7 @@ def test_trim_and_smoothing_keep_video_offset(tmp_path, monkeypatch):
     from mimic.processing.smooth_landmarks import smooth
     from mimic.processing.landmarks_to_rotations import solve
     monkeypatch.setattr(video_to_landmarks,'get_video_info',lambda p:dict(width=10,height=10,fps=30.,total_frames=5,duration=5/30))
-    monkeypatch.setattr(video_to_landmarks,'read_frames',lambda p:([None]*5,30.))
+    monkeypatch.setattr(video_to_landmarks,'stream_frames',lambda p,**k:(30., iter([None]*5)))
     vis=np.ones((5,33));vis[0]=vis[-1]=0
     monkeypatch.setattr(video_to_landmarks,'extract_landmarks',lambda frames,fps:dict(
         world_landmarks=np.stack([pose()]*5),visibility=vis,
@@ -179,7 +179,7 @@ def test_empty_detection_is_reported(tmp_path, monkeypatch):
     import pytest
     from mimic.extraction import video_to_landmarks
     monkeypatch.setattr(video_to_landmarks,'get_video_info',lambda p:dict(width=10,height=10,fps=30.,total_frames=3,duration=.1))
-    monkeypatch.setattr(video_to_landmarks,'read_frames',lambda p:([None]*3,30.))
+    monkeypatch.setattr(video_to_landmarks,'stream_frames',lambda p,**k:(30., iter([None]*3)))
     monkeypatch.setattr(video_to_landmarks,'extract_landmarks',lambda frames,fps:dict(
         world_landmarks=np.zeros((3,33,3)),visibility=np.zeros((3,33)),
         landmarks_2d=np.zeros((3,33,2)),landmark_names=[str(i) for i in range(33)]))
